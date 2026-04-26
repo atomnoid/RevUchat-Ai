@@ -81,21 +81,21 @@ const testimonials = [
   {
     name: 'Sarah Johnson',
     role: 'Dental Clinic Owner',
-    text: 'RevUchat AI transformed our reputation. We went from 3.8 to 4.9 stars in just 3 months. The automation is seamless.',
+    text: '&quot;RevUchat AI transformed our reputation. We went from 3.8 to 4.9 stars in just 3 months. The automation is seamless.&quot;',
     stars: 5,
     avatar: 'SJ',
   },
   {
     name: 'Marcus Chen',
     role: 'Restaurant Manager',
-    text: 'Best investment we made. Customers love the quick check-in process and our reviews speak for themselves.',
+    text: '&quot;Best investment we made. Customers love the quick check-in process and our reviews speak for themselves.&quot;',
     stars: 5,
     avatar: 'MC',
   },
   {
     name: 'Emily Torres',
     role: 'Spa Director',
-    text: 'Incredibly intuitive and powerful. The dashboard gives us everything. Our Google rating jumped from 4.1 to 4.8 stars.',
+    text: '&quot;Incredibly intuitive and powerful. The dashboard gives us everything. Our Google rating jumped from 4.1 to 4.8 stars.&quot;',
     stars: 5,
     avatar: 'ET',
   },
@@ -106,7 +106,7 @@ const plans = [
     name: 'Starter',
     price: '₹499',
     desc: 'Perfect for small businesses',
-    features: ['200 review requests/mo', 'Feedback collection system', 'Basic analytics', 'WhatsApp simulation', 'Email support'],
+    features: ['200 Review Requests per month', 'Feedback collection system', 'Basic analytics', 'Simulated messaging support', 'Email support'],
     cta: 'Start Free Trial',
     featured: false,
   },
@@ -114,7 +114,7 @@ const plans = [
     name: 'Growth',
     price: '₹749',
     desc: 'The complete solution for growth',
-    features: ['500 review requests/mo', 'Everything in Starter', 'Advanced analytics', 'Priority support', 'Faster response handling'],
+    features: ['500 Review Requests per month', 'Everything in Starter', 'Advanced analytics', 'Priority support', 'Faster response simulation'],
     cta: 'Start Free Trial',
     featured: true,
   },
@@ -122,7 +122,7 @@ const plans = [
     name: 'Scale',
     price: '₹999',
     desc: 'Unlimited power for large operations',
-    features: ['1000 review requests/mo', 'Everything in Growth', 'Priority processing', 'Dedicated support', 'Higher performance'],
+    features: ['1000 Review Requests per month', 'Everything in Growth', 'Priority processing', 'Dedicated support (simulated)'],
     cta: 'Start Free Trial',
     featured: false,
   },
@@ -130,14 +130,14 @@ const plans = [
     name: 'Custom',
     price: 'Custom Pricing',
     desc: 'For enterprise needs',
-    features: ['Unlimited review requests', 'Custom integrations', 'Dedicated onboarding', 'Personalized support', 'White-label options'],
+    features: ['Unlimited requests', 'Custom integrations', 'Dedicated onboarding', 'Personalized support'],
     cta: 'Contact Us',
     featured: false,
     isContact: true,
   },
 ];
 
-function AnimatedStat({ value, label, icon: Icon }: { value: string; label: string; icon: any }) {
+function AnimatedStat({ value, label, icon: Icon }) {
   const [count, setCount] = useState(0);
   const numValue = parseInt(value.replace(/[^0-9]/g, ''));
   const displayValue = value.includes('K') || value.includes('+') ? value : `${count}+`;
@@ -251,16 +251,9 @@ export default function LandingPage() {
         </div>
 
         <div className={`mt-16 grid grid-cols-3 gap-8 max-w-xl mx-auto ${mounted ? 'animate-fade-in-up delay-400' : 'opacity-0'}`}>
-          {[
-            { val: '10K+', label: 'Businesses' },
-            { val: '2.4M', label: 'Reviews Generated' },
-            { val: '4.9', label: 'Avg Rating Boost' },
-          ].map((s) => (
-            <div key={s.label} className="text-center">
-              <div className="text-3xl font-black neon-text">{s.val}</div>
-              <div className="text-xs text-white/40 mt-1">{s.label}</div>
-            </div>
-          ))}
+          <AnimatedStat value="100+" label="Businesses using RevUchat AI" icon={Users} />
+          <AnimatedStat value="10,000+" label="Reviews Generated" icon={Star} />
+          <AnimatedStat value="4.9★" label="Average Rating" icon={TrendingUp} />
         </div>
       </section>
 
@@ -336,7 +329,7 @@ export default function LandingPage() {
                   <Star key={i} size={14} className="text-[#39ff87] fill-[#39ff87]" />
                 ))}
               </div>
-              <p className="text-white/60 text-sm leading-relaxed mb-6 italic">"{t.text}"</p>
+              <p className="text-white/60 text-sm leading-relaxed mb-6 italic">&quot;{t.text}&quot;</p>
               <div className="flex items-center gap-3">
                 <div
                   className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-black"
@@ -366,16 +359,16 @@ export default function LandingPage() {
           {plans.map((plan) => (
             <div
               key={plan.name}
-              className="relative glass-card p-8 card-hover"
+              className={`relative glass-card p-8 transition-all duration-300 ${plan.featured ? 'hover:scale-105' : 'card-hover'}`}
               style={plan.featured ? {
-                border: '1px solid rgba(57,255,135,0.4)',
-                boxShadow: '0 0 40px rgba(57,255,135,0.1)',
+                border: '2px solid #39ff87',
+                boxShadow: '0 0 30px rgba(57,255,135,0.3), 0 0 60px rgba(57,255,135,0.1)',
               } : {}}
             >
               {plan.featured && (
                 <div
-                  className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs font-bold px-4 py-1 rounded-full text-black"
-                  style={{ background: '#39ff87' }}
+                  className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs font-bold px-4 py-1 rounded-full text-black animate-pulse"
+                  style={{ background: '#39ff87', boxShadow: '0 0 20px rgba(57,255,135,0.5)' }}
                 >
                   MOST POPULAR
                 </div>
@@ -383,7 +376,7 @@ export default function LandingPage() {
               <div className="text-white/60 text-sm mb-2">{plan.name}</div>
               <div className="flex items-end gap-1 mb-2">
                 <span className="text-5xl font-black text-white">{plan.price}</span>
-                <span className="text-white/40 text-sm pb-2">/month</span>
+                {!plan.isContact && <span className="text-white/40 text-sm pb-2">/month</span>}
               </div>
               <p className="text-white/40 text-sm mb-6">{plan.desc}</p>
               <ul className="space-y-3 mb-8">
@@ -396,7 +389,7 @@ export default function LandingPage() {
               </ul>
               <Link
                 href="/login"
-                className={`block text-center py-3 rounded-xl text-sm font-semibold transition-all ${plan.featured ? 'btn-neon-solid' : 'btn-neon'}`}
+                className={`block text-center py-3 rounded-xl text-sm font-semibold transition-all ${plan.featured ? 'btn-neon-solid hover:shadow-[0_0_30px_rgba(57,255,135,0.4)]' : 'btn-neon'}`}
               >
                 {plan.cta}
               </Link>
