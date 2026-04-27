@@ -48,8 +48,8 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: rgba(57, 255, 135, 0.6); }
 
 @layer base {
-  * { @apply border-border; }
-  body { @apply bg-background text-foreground; }
+  * { border-color: hsl(var(--border)); }
+  body { background-color: hsl(var(--background)); color: hsl(var(--foreground)); }
 }
 
 /* Cyber grid */

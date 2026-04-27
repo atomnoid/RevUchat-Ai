@@ -418,7 +418,7 @@ export default function DashboardPage() {
               </div>
               <div>
                 <h3 className="text-lg font-bold text-white">Message Limit Reached</h3>
-                <p className="text-sm text-white/50">You've used all your monthly messages</p>
+                <p className="text-sm text-white/50">You&apos;ve used all your monthly messages</p>
               </div>
             </div>
             
