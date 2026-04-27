@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import CyberBackground from '@/components/CyberBackground';
-import { Bot, LayoutDashboard, ChartBar as BarChart3, LogOut, Menu, X, Bell, ChevronRight, Settings } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import { getUserData, logout } from '@/lib/auth';
+import { Bot, LayoutDashboard, ChartBar as BarChart3, LogOut, Menu, X, Bell, ChevronRight, Settings, AlertCircle } from 'lucide-react';
+import { logout } from '@/lib/auth';
+import { useUser } from '@/hooks/useUser';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -18,53 +18,44 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const [userData, setUserData] = useState<any>(null);
-
-  useEffect(() => {
-    // Check auth and load user data
-    const loadUserData = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        router.push('/login');
-        return;
-      }
-
-      setUser(session.user);
-      
-      // Load user data from users table
-      const data = await getUserData(session.user.id);
-      setUserData(data);
-    };
-
-    loadUserData();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        router.push('/login');
-      } else {
-        setUser(session.user);
-        getUserData(session.user.id).then(setUserData);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [router]);
+  const { user, userData, loading, error, usagePercentage, isLimitReached } = useUser();
 
   const handleLogout = async () => {
     await logout();
     router.push('/login');
   };
 
-  if (!user || !userData) {
+  if (loading) {
     return (
       <div className="relative min-h-screen flex items-center justify-center">
         <CyberBackground />
-        <div className="text-white/50">Loading...</div>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-2 border-[#39ff87]/30 border-t-[#39ff87] rounded-full animate-spin" />
+          <div className="text-white/50 text-sm">Loading dashboard...</div>
+        </div>
       </div>
     );
+  }
+
+  if (error) {
+    return (
+      <div className="relative min-h-screen flex items-center justify-center px-4">
+        <CyberBackground />
+        <div className="text-center">
+          <div className="text-red-400 text-lg mb-4">{error}</div>
+          <button
+            onClick={() => window.location.reload()}
+            className="btn-neon-solid px-6 py-2 rounded-lg text-sm font-semibold"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null; // Will redirect via auth listener in useUser hook
   }
 
   const userInitials = user.email?.slice(0, 2).toUpperCase() || 'DU';
@@ -131,6 +122,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
 
+        {/* Usage Progress */}
+        <div className="px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-white/40">Message Usage</span>
+            <span className={`text-xs font-semibold ${isLimitReached ? 'text-red-400' : 'text-[#39ff87]'}`}>
+              {userData.messages_used}/{userData.message_limit}
+            </span>
+          </div>
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.1)' }}>
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${Math.min(usagePercentage, 100)}%`,
+                background: isLimitReached ? '#ff4757' : '#39ff87',
+              }}
+            />
+          </div>
+          {isLimitReached && (
+            <div className="flex items-center gap-1.5 mt-2 text-xs text-red-400">
+              <AlertCircle size={12} />
+              <span>Limit reached</span>
+            </div>
+          )}
+        </div>
+
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-1">
           <div className="text-xs text-white/20 px-3 mb-3 uppercase tracking-widest font-semibold">Menu</div>
@@ -191,7 +207,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </button>
             <div>
               <div className="text-sm font-semibold text-white">
-                {pathname === '/dashboard' ? 'Dashboard' : 'Analytics'}
+                {pathname === '/dashboard' ? 'Dashboard' : pathname === '/dashboard/analytics' ? 'Analytics' : 'Settings'}
               </div>
               <div className="text-xs text-white/30">
                 {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
@@ -201,11 +217,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           <div className="flex items-center gap-3">
             <div
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs"
-              style={{ background: 'rgba(57,255,135,0.08)', border: '1px solid rgba(57,255,135,0.2)', color: '#39ff87' }}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all ${
+                isLimitReached 
+                  ? 'bg-red-500/10 border-red-500/30 text-red-400' 
+                  : 'bg-[#39ff87]/8 border-[#39ff87]/20 text-[#39ff87]'
+              }`}
+              style={{ border: isLimitReached ? '1px solid rgba(255,71,87,0.3)' : '1px solid rgba(57,255,135,0.2)' }}
             >
-              <div className="w-1.5 h-1.5 rounded-full bg-[#39ff87] animate-pulse" />
-              {userData.messages_used}/{userData.message_limit} Messages
+              <div className={`w-1.5 h-1.5 rounded-full ${isLimitReached ? 'bg-red-400' : 'bg-[#39ff87] animate-pulse'}`} />
+              {userData.messages_used}/{userData.message_limit}
             </div>
             <button
               className="w-8 h-8 rounded-lg flex items-center justify-center text-white/40 hover:text-white transition-colors"
