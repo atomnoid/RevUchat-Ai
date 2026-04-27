@@ -207,6 +207,16 @@ input:focus, textarea:focus, select:focus {
   to { opacity: 1; transform: translateX(0); }
 }
 
+@keyframes slide-in-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 @keyframes spin-slow {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -224,9 +234,16 @@ input:focus, textarea:focus, select:focus {
   100% { top: 100%; opacity: 0; }
 }
 
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(57, 255, 135, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(57, 255, 135, 0.6); }
+}
+
 .animate-fade-in-up { animation: fade-in-up 0.6s ease forwards; }
 .animate-fade-in { animation: fade-in 0.5s ease forwards; }
 .animate-slide-in-left { animation: slide-in-left 0.5s ease forwards; }
+.animate-slide-in-up { animation: slide-in-up 0.5s ease forwards; }
+.animate-scale-in { animation: scale-in 0.3s ease forwards; }
 .animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
 .animate-spin-slow { animation: spin-slow 8s linear infinite; }
 
@@ -242,3 +259,17 @@ input:focus, textarea:focus, select:focus {
 .delay-400 { animation-delay: 400ms; }
 .delay-500 { animation-delay: 500ms; }
 .delay-600 { animation-delay: 600ms; }
+
+/* Smooth transitions for interactive elements */
+button, a, input {
+  transition: all 0.2s ease;
+}
+
+.glass-card {
+  transition: all 0.3s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(57, 255, 135, 0.1);
+}
