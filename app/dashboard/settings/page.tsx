@@ -82,12 +82,23 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const loadUserData = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const data = await getUserData(session.user.id);
-        setUserData(data);
+      try {
+        setLoading(true);
+        console.log('Fetching user data for settings...');
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          console.log('User found for settings:', session.user.id);
+          const data = await getUserData(session.user.id);
+          console.log('User data for settings:', data);
+          setUserData(data);
+        } else {
+          console.log('No user found for settings');
+        }
+      } catch (err) {
+        console.error('Error loading user data for settings:', err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     loadUserData();
   }, []);
