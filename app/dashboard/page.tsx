@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { Send, MessageSquare, ThumbsUp, ThumbsDown, Phone, User, Clock, CircleCheck as CheckCircle, Circle as XCircle, Star, ExternalLink, RefreshCw, Zap, Users, TrendingUp, Activity } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import Link from 'next/link';
+import { Send, MessageSquare, ThumbsUp, ThumbsDown, Phone, User, Clock, CircleCheck as CheckCircle, Circle as XCircle, Star, ExternalLink, RefreshCw, Zap, Users, TrendingUp, Activity, AlertTriangle } from 'lucide-react';
 import type { Customer, CustomerStatus, ChatMessage } from '@/lib/types';
-import { supabase } from '@/lib/supabase';
-import { getCustomers } from '@/services/messagingService';
+import { useUser } from '@/hooks/useUser';
+import { useCustomers } from '@/hooks/useCustomers';
 
 const REVIEW_LINK = 'https://g.page/r/your-google-review-link';
 
@@ -218,14 +219,62 @@ function ChatWindow({ customer, onRespond }: {
 }
 
 export default function DashboardPage() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { user, userData, isLimitReached } = useUser();
+  const { customers, loading, stats, refresh } = useCustomers(user?.id || null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [nameError, setNameError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
   const [sending, setSending] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [selected, setSelected] = useState<Customer | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+
+  const validateName = (value: string) => {
+    if (!value.trim()) {
+      setNameError('Name is required');
+      return false;
+    }
+    if (value.trim().length < 2) {
+      setNameError('Name must be at least 2 characters');
+      return false;
+    }
+    if (value.trim().length > 50) {
+      setNameError('Name must be less than 50 characters');
+      return false;
+    }
+    setNameError('');
+    return true;
+  };
+
+  const validatePhone = (value: string) => {
+    if (!value.trim()) {
+      setPhoneError('Phone number is required');
+      return false;
+    }
+    // Basic phone validation - allows +, digits, spaces, dashes, parentheses
+    const phoneRegex = /^[\d\s\-\+\(\)]+$/;
+    if (!phoneRegex.test(value.trim())) {
+      setPhoneError('Invalid phone number format');
+      return false;
+    }
+    if (value.trim().length < 10) {
+      setPhoneError('Phone number must be at least 10 digits');
+      return false;
+    }
+    setPhoneError('');
+    return true;
+  };
+
+  const handleNameChange = (value: string) => {
+    setName(value);
+    if (value.trim()) validateName(value);
+  };
+
+  const handlePhoneChange = (value: string) => {
+    setPhone(value);
+    if (value.trim()) validatePhone(value);
+  };
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type });
@@ -233,41 +282,24 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    // Get current user
-    const getCurrentUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUserId(session.user.id);
-      }
-    };
-    getCurrentUser();
-  }, []);
-
-  const fetchCustomers = async () => {
-    if (!userId) return;
-    
-    try {
-      const data = await getCustomers(userId);
-      setCustomers(data);
-      if (data.length > 0 && !selected) {
-        setSelected(data[0]);
-      }
-    } catch {
-      // silent
-    } finally {
-      setLoading(false);
+    if (customers.length > 0 && !selected) {
+      setSelected(customers[0]);
     }
-  };
-
-  useEffect(() => {
-    if (userId) {
-      fetchCustomers();
-    }
-  }, [userId]);
+  }, [customers, selected]);
 
   const sendRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !phone.trim() || !userId) return;
+    
+    if (isLimitReached) {
+      setShowUpgradeModal(true);
+      return;
+    }
+    
+    const isNameValid = validateName(name);
+    const isPhoneValid = validatePhone(phone);
+    
+    if (!isNameValid || !isPhoneValid || !user) return;
+    
     setSending(true);
     try {
       const res = await fetch('/api/send-message', {
@@ -284,7 +316,9 @@ export default function DashboardPage() {
         showToast(`Message sent to ${name.trim()} (simulated)`);
         setName('');
         setPhone('');
-        await fetchCustomers();
+        setNameError('');
+        setPhoneError('');
+        await refresh();
       } else {
         showToast(json.error || 'Failed to send request', 'error');
       }
@@ -304,7 +338,7 @@ export default function DashboardPage() {
       });
       const json = await res.json();
       if (json.success) {
-        await fetchCustomers();
+        await refresh();
         showToast(
           type === 'positive'
             ? 'Positive response! Google review link sent.'
@@ -315,13 +349,6 @@ export default function DashboardPage() {
     } catch {
       // silent
     }
-  };
-
-  const stats = {
-    total: customers.length,
-    positive: customers.filter((c) => c.status === 'positive').length,
-    negative: customers.filter((c) => c.status === 'negative').length,
-    pending: customers.filter((c) => c.status === 'pending').length,
   };
 
   return (
@@ -371,6 +398,61 @@ export default function DashboardPage() {
         ))}
       </div>
 
+      {/* Upgrade Modal */}
+      {showUpgradeModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            onClick={() => setShowUpgradeModal(false)}
+          />
+          <div
+            className="relative glass-card p-8 max-w-md w-full"
+            style={{ border: '1px solid rgba(57,255,135,0.2)' }}
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <div
+                className="w-12 h-12 rounded-xl flex items-center justify-center"
+                style={{ background: 'rgba(255,71,87,0.15)', border: '1px solid rgba(255,71,87,0.3)' }}
+              >
+                <AlertTriangle size={24} className="text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Message Limit Reached</h3>
+                <p className="text-sm text-white/50">You've used all your monthly messages</p>
+              </div>
+            </div>
+            
+            <div className="space-y-3 mb-6">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-white/60">Current Plan</span>
+                <span className="text-white font-semibold capitalize">{userData?.plan || 'Starter'}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-white/60">Messages Used</span>
+                <span className="text-red-400 font-semibold">{userData?.messages_used || 0}/{userData?.message_limit || 200}</span>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <Link
+                href="/dashboard/settings"
+                onClick={() => setShowUpgradeModal(false)}
+                className="btn-neon-solid w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
+              >
+                Upgrade Your Plan
+                <TrendingUp size={16} />
+              </Link>
+              <button
+                onClick={() => setShowUpgradeModal(false)}
+                className="w-full py-3 rounded-xl text-sm font-semibold text-white/60 hover:text-white transition-colors"
+              >
+                Maybe Later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main grid */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Left: Form + Activity */}
@@ -398,13 +480,23 @@ export default function DashboardPage() {
                   <input
                     type="text"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => handleNameChange(e.target.value)}
                     placeholder="John Smith"
-                    className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm text-white placeholder-white/25 transition-all"
-                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}
-                    required
+                    className={`w-full pl-9 pr-4 py-2.5 rounded-xl text-sm text-white placeholder-white/25 transition-all ${
+                      nameError ? 'border-red-400' : ''
+                    }`}
+                    style={{ 
+                      background: 'rgba(255,255,255,0.04)', 
+                      border: nameError ? '1px solid #ff4757' : '1px solid rgba(255,255,255,0.1)' 
+                    }}
                   />
                 </div>
+                {nameError && (
+                  <div className="text-xs text-red-400 mt-1.5 flex items-center gap-1">
+                    <AlertTriangle size={12} />
+                    {nameError}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -414,13 +506,23 @@ export default function DashboardPage() {
                   <input
                     type="tel"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => handlePhoneChange(e.target.value)}
                     placeholder="+1 (555) 000-0000"
-                    className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm text-white placeholder-white/25 transition-all"
-                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}
-                    required
+                    className={`w-full pl-9 pr-4 py-2.5 rounded-xl text-sm text-white placeholder-white/25 transition-all ${
+                      phoneError ? 'border-red-400' : ''
+                    }`}
+                    style={{ 
+                      background: 'rgba(255,255,255,0.04)', 
+                      border: phoneError ? '1px solid #ff4757' : '1px solid rgba(255,255,255,0.1)' 
+                    }}
                   />
                 </div>
+                {phoneError && (
+                  <div className="text-xs text-red-400 mt-1.5 flex items-center gap-1">
+                    <AlertTriangle size={12} />
+                    {phoneError}
+                  </div>
+                )}
               </div>
 
               <button
@@ -451,7 +553,7 @@ export default function DashboardPage() {
                 <h2 className="text-sm font-bold text-white">Activity</h2>
               </div>
               <button
-                onClick={fetchCustomers}
+                onClick={refresh}
                 className="text-white/30 hover:text-white/60 transition-colors p-1 rounded"
               >
                 <RefreshCw size={13} />
