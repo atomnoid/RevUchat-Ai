@@ -91,14 +91,20 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchData = async (showRefresh = false) => {
     if (!userId) return;
     
     if (showRefresh) setRefreshing(true);
     try {
+      console.log('Fetching analytics data for user:', userId);
       const data = await getCustomers(userId);
+      console.log('Analytics data fetched:', data);
       setCustomers(data);
+    } catch (err) {
+      console.error('Error fetching analytics data:', err);
+      setError('Failed to load analytics data');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -108,9 +114,17 @@ export default function AnalyticsPage() {
   useEffect(() => {
     // Get current user
     const getCurrentUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUserId(session.user.id);
+      try {
+        console.log('Fetching current user for analytics...');
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          console.log('Current user found for analytics:', session.user.id);
+          setUserId(session.user.id);
+        } else {
+          console.log('No current user found for analytics');
+        }
+      } catch (err) {
+        console.error('Error getting current user for analytics:', err);
       }
     };
     getCurrentUser();
@@ -185,6 +199,22 @@ export default function AnalyticsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="skeleton h-72 rounded-2xl" />
           <div className="skeleton h-72 rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="text-red-400 text-lg mb-4">{error}</div>
+          <button
+            onClick={() => fetchData(true)}
+            className="btn-neon-solid px-6 py-2 rounded-lg text-sm font-semibold"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
