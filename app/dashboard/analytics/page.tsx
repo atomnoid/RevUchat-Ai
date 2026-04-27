@@ -10,8 +10,8 @@ import {
   Activity, Clock, RefreshCw, ArrowUpRight, ArrowDownRight
 } from 'lucide-react';
 import type { Customer } from '@/lib/types';
-
-const DEMO_USER = 'demo-user';
+import { supabase } from '@/lib/supabase';
+import { getCustomers } from '@/services/messagingService';
 
 const COLORS = {
   positive: '#39ff87',
@@ -90,13 +90,15 @@ export default function AnalyticsPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
   const fetchData = async (showRefresh = false) => {
+    if (!userId) return;
+    
     if (showRefresh) setRefreshing(true);
     try {
-      const res = await fetch(`/api/customers?user_id=${DEMO_USER}`);
-      const json = await res.json();
-      if (json.data) setCustomers(json.data);
+      const data = await getCustomers(userId);
+      setCustomers(data);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -104,8 +106,21 @@ export default function AnalyticsPage() {
   };
 
   useEffect(() => {
-    fetchData();
+    // Get current user
+    const getCurrentUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUserId(session.user.id);
+      }
+    };
+    getCurrentUser();
   }, []);
+
+  useEffect(() => {
+    if (userId) {
+      fetchData();
+    }
+  }, [userId]);
 
   const total = customers.length;
   const positive = customers.filter((c) => c.status === 'positive').length;

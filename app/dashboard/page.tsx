@@ -3,9 +3,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { Send, MessageSquare, ThumbsUp, ThumbsDown, Phone, User, Clock, CircleCheck as CheckCircle, Circle as XCircle, Star, ExternalLink, RefreshCw, Zap, Users, TrendingUp, Activity } from 'lucide-react';
 import type { Customer, CustomerStatus, ChatMessage } from '@/lib/types';
+import { supabase } from '@/lib/supabase';
+import { getCustomers } from '@/services/messagingService';
 
 const REVIEW_LINK = 'https://g.page/r/your-google-review-link';
-const DEMO_USER = 'demo-user';
 
 function StatusBadge({ status }: { status: CustomerStatus }) {
   const map = {
@@ -224,21 +225,32 @@ export default function DashboardPage() {
   const [sending, setSending] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [selected, setSelected] = useState<Customer | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
   };
 
+  useEffect(() => {
+    // Get current user
+    const getCurrentUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUserId(session.user.id);
+      }
+    };
+    getCurrentUser();
+  }, []);
+
   const fetchCustomers = async () => {
+    if (!userId) return;
+    
     try {
-      const res = await fetch(`/api/customers?user_id=${DEMO_USER}`);
-      const json = await res.json();
-      if (json.data) {
-        setCustomers(json.data);
-        if (json.data.length > 0 && !selected) {
-          setSelected(json.data[0]);
-        }
+      const data = await getCustomers(userId);
+      setCustomers(data);
+      if (data.length > 0 && !selected) {
+        setSelected(data[0]);
       }
     } catch {
       // silent
@@ -248,29 +260,33 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    fetchCustomers();
-  }, []);
+    if (userId) {
+      fetchCustomers();
+    }
+  }, [userId]);
 
   const sendRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !phone.trim()) return;
+    if (!name.trim() || !phone.trim() || !userId) return;
     setSending(true);
     try {
-      const res = await fetch('/api/customers', {
+      const res = await fetch('/api/send-message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), phone: phone.trim(), user_id: DEMO_USER }),
+        body: JSON.stringify({ 
+          customerName: name.trim(), 
+          customerPhone: phone.trim(),
+          message: `Hi ${name.trim()}! Thanks for visiting us today.\n\nHow was your experience?\n1️⃣  Excellent\n2️⃣  Good\n3️⃣  Not satisfied`,
+        }),
       });
       const json = await res.json();
-      if (json.data) {
-        const newCustomer = json.data as Customer;
-        setCustomers((prev) => [newCustomer, ...prev]);
-        setSelected(newCustomer);
+      if (json.success) {
+        showToast(`Message sent to ${name.trim()} (simulated)`);
         setName('');
         setPhone('');
-        showToast(`Message sent to ${newCustomer.name} (simulated)`);
+        await fetchCustomers();
       } else {
-        showToast('Failed to send request', 'error');
+        showToast(json.error || 'Failed to send request', 'error');
       }
     } catch {
       showToast('Network error', 'error');
@@ -281,16 +297,14 @@ export default function DashboardPage() {
 
   const handleRespond = async (id: string, type: 'positive' | 'negative') => {
     try {
-      const res = await fetch(`/api/customers/${id}`, {
-        method: 'PATCH',
+      const res = await fetch('/api/simulate-response', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: type }),
+        body: JSON.stringify({ customerId: id, response: type }),
       });
       const json = await res.json();
-      if (json.data) {
-        const updated = json.data as Customer;
-        setCustomers((prev) => prev.map((c) => (c.id === id ? updated : c)));
-        setSelected(updated);
+      if (json.success) {
+        await fetchCustomers();
         showToast(
           type === 'positive'
             ? 'Positive response! Google review link sent.'

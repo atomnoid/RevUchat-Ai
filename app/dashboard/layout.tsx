@@ -1,24 +1,73 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import CyberBackground from '@/components/CyberBackground';
-import { Bot, LayoutDashboard, ChartBar as BarChart3, LogOut, Menu, X, MessageSquare, Zap, Bell, Settings, User, ChevronRight } from 'lucide-react';
+import { Bot, LayoutDashboard, ChartBar as BarChart3, LogOut, Menu, X, Bell, ChevronRight, Settings } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { getUserData, logout } from '@/lib/auth';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart3 },
+  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [userData, setUserData] = useState<any>(null);
 
-  const handleLogout = () => {
+  useEffect(() => {
+    // Check auth and load user data
+    const loadUserData = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        router.push('/login');
+        return;
+      }
+
+      setUser(session.user);
+      
+      // Load user data from users table
+      const data = await getUserData(session.user.id);
+      setUserData(data);
+    };
+
+    loadUserData();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        router.push('/login');
+      } else {
+        setUser(session.user);
+        getUserData(session.user.id).then(setUserData);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [router]);
+
+  const handleLogout = async () => {
+    await logout();
     router.push('/login');
   };
+
+  if (!user || !userData) {
+    return (
+      <div className="relative min-h-screen flex items-center justify-center">
+        <CyberBackground />
+        <div className="text-white/50">Loading...</div>
+      </div>
+    );
+  }
+
+  const userInitials = user.email?.slice(0, 2).toUpperCase() || 'DU';
 
   return (
     <div className="relative min-h-screen flex">
@@ -73,11 +122,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-black shrink-0"
               style={{ background: '#39ff87' }}
             >
-              DU
+              {userInitials}
             </div>
             <div className="min-w-0">
-              <div className="text-xs font-semibold text-white truncate">Demo User</div>
-              <div className="text-xs text-white/30 truncate">demo@revuchat.ai</div>
+              <div className="text-xs font-semibold text-white truncate">{user.email}</div>
+              <div className="text-xs text-[#39ff87] capitalize">{userData.plan} Plan</div>
             </div>
           </div>
         </div>
@@ -156,7 +205,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               style={{ background: 'rgba(57,255,135,0.08)', border: '1px solid rgba(57,255,135,0.2)', color: '#39ff87' }}
             >
               <div className="w-1.5 h-1.5 rounded-full bg-[#39ff87] animate-pulse" />
-              Live
+              {userData.messages_used}/{userData.message_limit} Messages
             </div>
             <button
               className="w-8 h-8 rounded-lg flex items-center justify-center text-white/40 hover:text-white transition-colors"
@@ -168,7 +217,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-black"
               style={{ background: '#39ff87' }}
             >
-              DU
+              {userInitials}
             </div>
           </div>
         </header>

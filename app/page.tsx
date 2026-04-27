@@ -81,7 +81,7 @@ const testimonials = [
   {
     name: 'Sarah Johnson',
     role: 'Dental Clinic Owner',
-    text: '&quot;RevUchat AI transformed our reputation. We went from 3.8 to 4.9 stars in just 3 months. The automation is seamless.&quot;',
+    text: '&quot;RevUchat AI transformed our reputation. We went from 3.8 to 4.5 stars in just 3 months. The automation is seamless.&quot;',
     stars: 5,
     avatar: 'SJ',
   },
@@ -139,8 +139,9 @@ const plans = [
 
 function AnimatedStat({ value, label, icon: Icon }) {
   const [count, setCount] = useState(0);
-  const numValue = parseInt(value.replace(/[^0-9]/g, ''));
-  const displayValue = value.includes('K') || value.includes('+') ? value : `${count}+`;
+  const hasDecimal = value.includes('.');
+  const numValue = hasDecimal ? parseFloat(value.replace(/[^0-9.]/g, '')) : parseInt(value.replace(/[^0-9]/g, ''));
+  const displayValue = value.includes('K') || value.includes('+') || hasDecimal ? value : `${count}+`;
 
   useEffect(() => {
     if (numValue === 0) return;
@@ -201,7 +202,7 @@ export default function LandingPage() {
           <Link href="/login" className="text-sm text-white/60 hover:text-white transition-colors px-4 py-2">
             Sign In
           </Link>
-          <Link href="/login" className="btn-neon-solid text-sm px-5 py-2 rounded-lg font-semibold">
+          <Link href="/signup" className="btn-neon-solid text-sm px-5 py-2 rounded-lg font-semibold">
             Start Free
           </Link>
         </div>
@@ -253,7 +254,7 @@ export default function LandingPage() {
         <div className={`mt-16 grid grid-cols-3 gap-8 max-w-xl mx-auto ${mounted ? 'animate-fade-in-up delay-400' : 'opacity-0'}`}>
           <AnimatedStat value="100+" label="Businesses using RevUchat AI" icon={Users} />
           <AnimatedStat value="10,000+" label="Reviews Generated" icon={Star} />
-          <AnimatedStat value="4.9★" label="Average Rating" icon={TrendingUp} />
+          <AnimatedStat value="4.5+" label="Average Rating" icon={TrendingUp} />
         </div>
       </section>
 
