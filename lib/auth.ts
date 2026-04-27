@@ -27,6 +27,7 @@ export function useAuth() {
 
 export async function getCurrentUser() {
   const { data: { user } } = await supabase.auth.getUser();
+  console.log('Auth user:', user);
   return user;
 }
 
@@ -35,13 +36,14 @@ export async function getUserData(userId: string) {
     .from('users')
     .select('*')
     .eq('id', userId)
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Error fetching user data:', error);
     return null;
   }
 
+  console.log('User data:', data);
   return data;
 }
 
