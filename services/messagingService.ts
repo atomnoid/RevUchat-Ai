@@ -27,17 +27,34 @@ export interface SendMessageResult {
 }
 
 /**
+ * Get priority level based on user's plan
+ * Returns: 1 (Starter), 2 (Growth), 3 (Pro)
+ */
+function getPriorityLevel(plan: string): number {
+  const planLower = plan?.toLowerCase() || 'starter';
+  if (planLower === 'pro') return 3;
+  if (planLower === 'growth') return 2;
+  return 1; // starter
+}
+
+/**
  * Send a message to a customer
  * 
  * Currently: Simulates sending and saves to database
  * Future: Will call WhatsApp API
+ * 
+ * Priority Logic:
+ * - Pro users (priority 3) are processed first
+ * - Growth users (priority 2) are processed second
+ * - Starter users (priority 1) are processed last
+ * - Within same priority, messages are processed by timestamp
  */
 export async function sendMessage(params: SendMessageParams): Promise<SendMessageResult> {
   try {
-    // Check user's message limit
+    // Fetch user data including plan and message limits
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('message_limit, messages_used')
+      .select('message_limit, messages_used, plan')
       .eq('id', params.userId)
       .single();
 
@@ -51,6 +68,9 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
         error: `Message limit reached. You have used ${userData.messages_used} of ${userData.message_limit} messages.` 
       };
     }
+
+    // Get priority level based on plan
+    const priorityLevel = getPriorityLevel(userData.plan);
 
     // Create customer record
     const { data: customer, error: customerError } = await supabase
@@ -68,7 +88,7 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
       return { success: false, error: 'Failed to create customer' };
     }
 
-    // Create message record
+    // Create message record with priority
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .insert({
@@ -76,6 +96,7 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
         customer_id: customer.id,
         direction: 'sent',
         content: params.message,
+        priority_level: priorityLevel,
       })
       .select()
       .single();
@@ -95,6 +116,8 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
     }
 
     // FUTURE: Call WhatsApp API here
+    // Priority queue processing would happen here in a real system
+    // For now, we simulate by storing the priority level
     // const whatsappResponse = await whatsappApi.sendMessage(params.customerPhone, params.message);
 
     return {
@@ -138,6 +161,28 @@ export async function getCustomerMessages(customerId: string) {
 
   if (error) {
     console.error('Error fetching messages:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+/**
+ * Get all messages sorted by priority (for queue processing)
+ * This would be used by a background worker to process messages
+ * 
+ * Order: priority_level (desc) → created_at (asc)
+ */
+export async function getPriorityQueue() {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('direction', 'sent')
+    .order('priority_level', { ascending: false })
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching priority queue:', error);
     return [];
   }
 
