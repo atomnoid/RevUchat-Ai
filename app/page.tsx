@@ -104,25 +104,42 @@ const testimonials = [
 const plans = [
   {
     name: 'Starter',
-    price: '₹499',
+    price: '₹599',
     desc: 'Perfect for small businesses',
-    features: ['200 Review Requests per month', 'Feedback collection system', 'Basic analytics', 'Simulated messaging support', 'Email support'],
+    features: [
+      '200 Interactions per month',
+      'Manual Send (one-click messaging)',
+      'Basic Analytics',
+      'Email Support'
+    ],
     cta: 'Start Free Trial',
     featured: false,
   },
   {
     name: 'Growth',
-    price: '₹749',
-    desc: 'The complete solution for growth',
-    features: ['500 Review Requests per month', 'Everything in Starter', 'Advanced analytics', 'Priority support', 'Faster response simulation'],
+    price: '₹799',
+    desc: 'Most Popular - Best for growing businesses',
+    features: [
+      '350 Interactions per month',
+      'Auto Follow-up (1 Reminder)',
+      'Priority Sending',
+      'Advanced Analytics',
+      'Priority Support'
+    ],
     cta: 'Start Free Trial',
     featured: true,
   },
   {
-    name: 'Scale',
+    name: 'Pro',
     price: '₹999',
-    desc: 'Unlimited power for large operations',
-    features: ['1000 Review Requests per month', 'Everything in Growth', 'Priority processing', 'Dedicated support (simulated)'],
+    desc: 'For businesses with high volume',
+    features: [
+      '500 Interactions per month',
+      'Auto Follow-up (2 Reminders)',
+      'Bulk Upload (CSV)',
+      'Advanced Analytics',
+      'Priority Support'
+    ],
     cta: 'Start Free Trial',
     featured: false,
   },
@@ -130,10 +147,16 @@ const plans = [
     name: 'Custom',
     price: 'Custom Pricing',
     desc: 'For enterprise needs',
-    features: ['Unlimited requests', 'Custom integrations', 'Dedicated onboarding', 'Personalized support'],
+    features: [
+      'Unlimited Interactions',
+      'Custom Integrations',
+      'Dedicated Onboarding',
+      'Personalized Support'
+    ],
     cta: 'Contact Us',
     featured: false,
     isContact: true,
+    mailto: 'mailto:support@revuchat.ai?subject=Custom Plan Request – RevUchat AI',
   },
 ];
 
@@ -388,12 +411,21 @@ export default function LandingPage() {
                   </li>
                 ))}
               </ul>
-              <Link
-                href="/login"
-                className={`block text-center py-3 rounded-xl text-sm font-semibold transition-all ${plan.featured ? 'btn-neon-solid hover:shadow-[0_0_30px_rgba(57,255,135,0.4)]' : 'btn-neon'}`}
-              >
-                {plan.cta}
-              </Link>
+              {plan.isContact ? (
+                <a
+                  href={plan.mailto}
+                  className={`block text-center py-3 rounded-xl text-sm font-semibold transition-all ${plan.featured ? 'btn-neon-solid hover:shadow-[0_0_30px_rgba(57,255,135,0.4)]' : 'btn-neon'}`}
+                >
+                  {plan.cta}
+                </a>
+              ) : (
+                <Link
+                  href="/login"
+                  className={`block text-center py-3 rounded-xl text-sm font-semibold transition-all ${plan.featured ? 'btn-neon-solid hover:shadow-[0_0_30px_rgba(57,255,135,0.4)]' : 'btn-neon'}`}
+                >
+                  {plan.cta}
+                </Link>
+              )}
             </div>
           ))}
         </div>
