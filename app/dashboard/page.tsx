@@ -6,6 +6,7 @@ import { Send, MessageSquare, ThumbsUp, ThumbsDown, Phone, User, Clock, CircleCh
 import type { Customer, CustomerStatus, ChatMessage } from '@/lib/types';
 import { useUser } from '@/hooks/useUser';
 import { useCustomers } from '@/hooks/useCustomers';
+import { supabase } from '@/lib/supabase';
 
 const REVIEW_LINK = 'https://g.page/r/your-google-review-link';
 
@@ -242,8 +243,8 @@ function ChatWindow({ customer, onRespond, onResend, resending }: { customer: Cu
 }
 
 export default function DashboardPage() {
-  const { user, userData, isLimitReached } = useUser();
-  const { customers, loading, stats, refresh } = useCustomers(user?.id || null);
+  const { user, userData, whatsappConnection, isLimitReached, refresh } = useUser();
+  const { customers, loading, stats, refresh: refreshCustomers } = useCustomers(user?.id || null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [nameError, setNameError] = useState('');
@@ -264,6 +265,49 @@ export default function DashboardPage() {
   const [showOtpInput, setShowOtpInput] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
   const [verifyingOtp, setVerifyingOtp] = useState(false);
+
+  // Sync WhatsApp connection data to form
+  useEffect(() => {
+    if (whatsappConnection) {
+      setWhatsappBusinessName(whatsappConnection.business_name || '');
+      setWhatsappNumber(whatsappConnection.phone_number || '');
+      if (whatsappConnection.status === 'pending_otp') {
+        setShowOtpInput(true);
+      } else {
+        setShowOtpInput(false);
+      }
+    } else {
+      setWhatsappBusinessName('');
+      setWhatsappNumber('');
+      setShowOtpInput(false);
+    }
+  }, [whatsappConnection]);
+
+  // Realtime subscription for WhatsApp connection changes
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('whatsapp_connection_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'whatsapp_connections',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          console.log('WhatsApp connection changed:', payload);
+          refresh();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, refresh]);
 
   const validateName = (value: string) => {
     if (!value.trim()) {
@@ -420,7 +464,7 @@ export default function DashboardPage() {
   const isVerificationAllowed = () => {
     const now = new Date();
     const hours = now.getHours();
-    return hours >= 10 && hours < 0; // 10 AM to 12 AM (midnight)
+    return hours >= 10; // 10 AM to 12 AM (midnight)
   };
 
   const handleSendOtp = async (e: React.FormEvent) => {
@@ -495,8 +539,43 @@ export default function DashboardPage() {
     }
   };
 
+  const handleResendOtp = async () => {
+    if (!whatsappBusinessName.trim() || !whatsappNumber.trim()) {
+      showToast('Please fill in all fields', 'error');
+      return;
+    }
+    if (!isVerificationAllowed()) {
+      showToast('Verification available between 10:00 AM – 12:00 AM', 'error');
+      return;
+    }
+    
+    setSendingOtp(true);
+    try {
+      const res = await fetch('/api/whatsapp/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          action: 'send_otp',
+          businessName: whatsappBusinessName.trim(),
+          phoneNumber: whatsappNumber.trim(),
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setShowOtpInput(true);
+        showToast(`OTP resent to your WhatsApp number${json.otp ? ` (Demo OTP: ${json.otp})` : ''}`);
+      } else {
+        showToast(json.error || 'Failed to send OTP', 'error');
+      }
+    } catch {
+      showToast('Network error', 'error');
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
   const getWhatsAppStatusBadge = () => {
-    const status = userData?.whatsapp_status || 'not_connected';
+    const status = whatsappConnection?.status || 'not_connected';
     const map = {
       not_connected: { label: 'Not Connected', color: '#ff4757', icon: XCircle },
       pending_otp: { label: 'Pending OTP', color: '#fbbf24', icon: Clock },
@@ -606,114 +685,175 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {!showOtpInput ? (
-          <form onSubmit={handleSendOtp} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs text-white/50 mb-1.5 font-medium">Business Name</label>
-                <input
-                  type="text"
-                  value={whatsappBusinessName}
-                  onChange={(e) => setWhatsappBusinessName(e.target.value)}
-                  placeholder="Your Business Name"
-                  className="w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-white/25 transition-all"
-                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}
-                />
+        {(() => {
+          const status = whatsappConnection?.status || 'not_connected';
+          
+          // Active state - show success
+          if (status === 'active') {
+            return (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                  style={{ background: 'rgba(57,255,135,0.1)', border: '2px solid #39ff87' }}
+                >
+                  <CheckCircle size={32} className="text-[#39ff87]" />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">WhatsApp Connected</h3>
+                <p className="text-sm text-white/40 mb-4">
+                  Connected as {whatsappConnection?.business_name}
+                </p>
+                <p className="text-xs text-white/30">
+                  {whatsappConnection?.phone_number}
+                </p>
               </div>
-              <div>
-                <label className="block text-xs text-white/50 mb-1.5 font-medium">WhatsApp Number</label>
-                <input
-                  type="tel"
-                  value={whatsappNumber}
-                  onChange={(e) => setWhatsappNumber(e.target.value)}
-                  placeholder="+91 98765 43210"
-                  className="w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-white/25 transition-all"
-                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}
-                />
+            );
+          }
+          
+          // Setup in progress - show connecting state
+          if (status === 'setup_pending') {
+            return (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                  style={{ background: 'rgba(255,159,67,0.1)', border: '2px solid #ff9f43' }}
+                >
+                  <Activity size={32} className="text-[#ff9f43] animate-pulse" />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">Setup in Progress</h3>
+                <p className="text-sm text-white/40 mb-4">
+                  Your WhatsApp connection is being set up
+                </p>
+                <p className="text-xs text-white/30">
+                  Usually completes within a few minutes (max 24 hours)
+                </p>
               </div>
-            </div>
+            );
+          }
+          
+          // Pending OTP - show OTP input
+          if (status === 'pending_otp' || showOtpInput) {
+            return (
+              <form onSubmit={handleVerifyOtp} className="space-y-4">
+                <div className="text-center py-4">
+                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                    style={{ background: 'rgba(57,255,135,0.08)', border: '1px solid rgba(57,255,135,0.2)' }}
+                  >
+                    <MessageCircle size={32} className="text-[#39ff87]" />
+                  </div>
+                  <h3 className="text-lg font-bold text-white mb-2">Enter OTP</h3>
+                  <p className="text-sm text-white/40">
+                    We've sent a 6-digit OTP to {whatsappNumber}
+                  </p>
+                </div>
 
-            <div className="text-xs text-white/40 flex items-center gap-1.5">
-              <Clock size={12} />
-              Verification available between 10:00 AM – 12:00 AM
-            </div>
+                <div>
+                  <input
+                    type="text"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="Enter 6-digit OTP"
+                    maxLength={6}
+                    className="w-full px-4 py-3 rounded-xl text-lg text-white placeholder-white/25 text-center tracking-widest transition-all"
+                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', letterSpacing: '0.5em' }}
+                  />
+                </div>
 
-            <button
-              type="submit"
-              disabled={sendingOtp || !isVerificationAllowed()}
-              className="btn-neon-solid w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {sendingOtp ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                  Sending OTP...
-                </>
-              ) : (
-                <>
-                  <MessageCircle size={16} />
-                  Start Verification
-                </>
-              )}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleVerifyOtp} className="space-y-4">
-            <div className="text-center py-4">
-              <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
-                style={{ background: 'rgba(57,255,135,0.08)', border: '1px solid rgba(57,255,135,0.2)' }}
-              >
-                <MessageCircle size={32} className="text-[#39ff87]" />
+                <div className="text-xs text-white/40 text-center">
+                  Setup usually completes within a few minutes (max 24 hours)
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowOtpInput(false)}
+                    className="flex-1 py-3 rounded-xl text-sm font-semibold text-white/60 hover:text-white transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={verifyingOtp}
+                    className="flex-1 btn-neon-solid py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {verifyingOtp ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                        Verifying...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle size={16} />
+                        Verify OTP
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={sendingOtp}
+                    className="text-xs text-[#39ff87] hover:text-[#39ff87]/80 transition-colors disabled:opacity-50"
+                  >
+                    {sendingOtp ? 'Resending...' : 'Resend OTP'}
+                  </button>
+                </div>
+              </form>
+            );
+          }
+          
+          // Not connected - show form
+          return (
+            <form onSubmit={handleSendOtp} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-white/50 mb-1.5 font-medium">Business Name</label>
+                  <input
+                    type="text"
+                    value={whatsappBusinessName}
+                    onChange={(e) => setWhatsappBusinessName(e.target.value)}
+                    placeholder="Your Business Name"
+                    className="w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-white/25 transition-all"
+                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-white/50 mb-1.5 font-medium">WhatsApp Number</label>
+                  <input
+                    type="tel"
+                    value={whatsappNumber}
+                    onChange={(e) => setWhatsappNumber(e.target.value)}
+                    placeholder="+91 98765 43210"
+                    className="w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-white/25 transition-all"
+                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}
+                  />
+                </div>
               </div>
-              <h3 className="text-lg font-bold text-white mb-2">Enter OTP</h3>
-              <p className="text-sm text-white/40">
-                We've sent a 6-digit OTP to {whatsappNumber}
-              </p>
-            </div>
 
-            <div>
-              <input
-                type="text"
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="Enter 6-digit OTP"
-                maxLength={6}
-                className="w-full px-4 py-3 rounded-xl text-lg text-white placeholder-white/25 text-center tracking-widest transition-all"
-                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', letterSpacing: '0.5em' }}
-              />
-            </div>
+              <div className="text-xs text-white/40 flex items-center gap-1.5">
+                <Clock size={12} />
+                Verification available between 10:00 AM – 12:00 AM
+              </div>
 
-            <div className="text-xs text-white/40 text-center">
-              Setup usually completes within a few minutes (max 24 hours)
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setShowOtpInput(false)}
-                className="flex-1 py-3 rounded-xl text-sm font-semibold text-white/60 hover:text-white transition-colors"
-              >
-                Cancel
-              </button>
               <button
                 type="submit"
-                disabled={verifyingOtp}
-                className="flex-1 btn-neon-solid py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                disabled={sendingOtp || !isVerificationAllowed()}
+                className="btn-neon-solid w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {verifyingOtp ? (
+                {sendingOtp ? (
                   <>
                     <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                    Verifying...
+                    Sending OTP...
                   </>
                 ) : (
                   <>
-                    <CheckCircle size={16} />
-                    Verify OTP
+                    <MessageCircle size={16} />
+                    Start Verification
                   </>
                 )}
               </button>
-            </div>
-          </form>
-        )}
+            </form>
+          );
+        })()}
       </div>
 
       {/* Toast */}
