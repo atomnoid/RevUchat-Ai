@@ -5,17 +5,17 @@ import { CreditCard, Zap, Crown, ArrowRight, Check, Loader2 } from 'lucide-react
 import { supabase } from '@/lib/supabase';
 import { getUserData } from '@/lib/auth';
 
-const PLANS = [
+const plans = [
   {
     id: 'starter',
     name: 'Starter',
-    price: '₹499',
-    messageLimit: 200,
+    price: '₹599',
+    interactions: 200,
     features: [
-      '200 Review Requests per month',
-      'Feedback collection system',
-      'Basic analytics',
-      'Email support',
+      '200 Interactions per month',
+      'Manual Send (one-click messaging)',
+      'Basic Analytics',
+      'Email Support'
     ],
     icon: Zap,
     color: '#39d9ff',
@@ -23,29 +23,30 @@ const PLANS = [
   {
     id: 'growth',
     name: 'Growth',
-    price: '₹749',
-    messageLimit: 500,
+    price: '₹799',
+    interactions: 350,
+    popular: true,
     features: [
-      '500 Review Requests per month',
-      'Everything in Starter',
-      'Advanced analytics',
-      'Priority support',
-      'Faster response simulation',
+      '350 Interactions per month',
+      'Auto Follow-up (1 Reminder)',
+      'Priority Sending',
+      'Advanced Analytics',
+      'Priority Support'
     ],
     icon: Crown,
     color: '#39ff87',
-    featured: true,
   },
   {
-    id: 'scale',
-    name: 'Scale',
+    id: 'pro',
+    name: 'Pro',
     price: '₹999',
-    messageLimit: 1000,
+    interactions: 500,
     features: [
-      '1000 Review Requests per month',
-      'Everything in Growth',
-      'Priority processing',
-      'Dedicated support',
+      '500 Interactions per month',
+      'Auto Follow-up (2 Reminders)',
+      'Bulk Upload (CSV)',
+      'Advanced Analytics',
+      'Priority Support'
     ],
     icon: CreditCard,
     color: '#c87bff',
@@ -159,22 +160,22 @@ export default function SettingsPage() {
       <div>
         <h2 className="text-lg font-bold text-white mb-4">Upgrade Your Plan</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {PLANS.map((plan) => {
+          {plans.map((plan) => {
             const isCurrentPlan = userData?.plan === plan.id;
-            const isUpgrade = plan.messageLimit > (userData?.message_limit || 200);
+            const isUpgrade = plan.interactions > (userData?.message_limit || 200);
             
             return (
               <div
                 key={plan.id}
                 className={`relative glass-card p-6 transition-all ${
-                  plan.featured ? 'hover:scale-105' : 'card-hover'
+                  plan.popular ? 'hover:scale-105' : 'card-hover'
                 }`}
                 style={{
-                  border: plan.featured ? '2px solid #39ff87' : '1px solid rgba(255,255,255,0.06)',
+                  border: plan.popular ? '2px solid #39ff87' : '1px solid rgba(255,255,255,0.06)',
                   opacity: isCurrentPlan ? 0.7 : 1,
                 }}
               >
-                {plan.featured && (
+                {plan.popular && (
                   <div
                     className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs font-bold px-3 py-1 rounded-full text-black"
                     style={{ background: '#39ff87' }}
