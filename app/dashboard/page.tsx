@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { Send, MessageSquare, ThumbsUp, ThumbsDown, Phone, User, Clock, CircleCheck as CheckCircle, Circle as XCircle, Star, ExternalLink, RefreshCw, Zap, Users, TrendingUp, Activity, AlertTriangle } from 'lucide-react';
+import { Send, MessageSquare, ThumbsUp, ThumbsDown, Phone, User, Clock, CircleCheck as CheckCircle, Circle as XCircle, Star, ExternalLink, RefreshCw, Zap, Users, TrendingUp, Activity, AlertTriangle, RotateCcw, Upload, FileSpreadsheet, MessageCircle, Shield } from 'lucide-react';
 import type { Customer, CustomerStatus, ChatMessage } from '@/lib/types';
 import { useUser } from '@/hooks/useUser';
 import { useCustomers } from '@/hooks/useCustomers';
@@ -24,10 +24,7 @@ function StatusBadge({ status }: { status: CustomerStatus }) {
   );
 }
 
-function ChatWindow({ customer, onRespond }: {
-  customer: Customer;
-  onRespond: (id: string, type: 'positive' | 'negative') => Promise<void>;
-}) {
+function ChatWindow({ customer, onRespond, onResend, resending }: { customer: Customer; onRespond: (id: string, type: 'positive' | 'negative') => Promise<void>; onResend?: (id: string) => void; resending?: boolean }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [responded, setResponded] = useState(customer.status !== 'pending');
   const [simulating, setSimulating] = useState(false);
@@ -196,7 +193,7 @@ function ChatWindow({ customer, onRespond }: {
               }}
             >
               <ThumbsUp size={13} />
-              Positive Response
+              Happy
             </button>
             <button
               onClick={() => simulate('negative')}
@@ -209,8 +206,34 @@ function ChatWindow({ customer, onRespond }: {
               }}
             >
               <ThumbsDown size={13} />
-              Negative Response
+              Not Happy
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Resend/Follow-up button for pending customers */}
+      {customer.status === 'pending' && responded && onResend && (
+        <div className="px-4 py-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <button
+            onClick={() => onResend(customer.id)}
+            disabled={resending}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-all disabled:opacity-50"
+            style={{
+              background: 'rgba(57,255,135,0.1)',
+              border: '1px solid rgba(57,255,135,0.3)',
+              color: '#39ff87',
+            }}
+          >
+            {resending ? (
+              <div className="w-4 h-4 border-2 border-[#39ff87]/30 border-t-[#39ff87] rounded-full animate-spin" />
+            ) : (
+              <RotateCcw size={13} />
+            )}
+            Resend / Follow-up
+          </button>
+          <div className="text-xs text-white/30 mt-2 text-center">
+            This will allow you to resend the message to customers who haven't responded
           </div>
         </div>
       )}
@@ -226,9 +249,21 @@ export default function DashboardPage() {
   const [nameError, setNameError] = useState('');
   const [phoneError, setPhoneError] = useState('');
   const [sending, setSending] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [showCsvUpload, setShowCsvUpload] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [selected, setSelected] = useState<Customer | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // WhatsApp connection state
+  const [whatsappBusinessName, setWhatsappBusinessName] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [showOtpInput, setShowOtpInput] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
 
   const validateName = (value: string) => {
     if (!value.trim()) {
@@ -351,8 +386,336 @@ export default function DashboardPage() {
     }
   };
 
+  const handleResend = async (customerId: string) => {
+    if (!user) return;
+    setResending(true);
+    try {
+      const customer = customers.find(c => c.id === customerId);
+      if (!customer) return;
+
+      const res = await fetch('/api/send-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          customerName: customer.name,
+          customerPhone: customer.phone,
+          message: `Hi ${customer.name}! Just following up on your feedback request.\n\nHow was your experience?\n1️⃣  Excellent\n2️⃣  Good\n3️⃣  Not satisfied`,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        showToast(`Follow-up message sent to ${customer.name}`);
+        await refresh();
+      } else {
+        showToast(json.error || 'Failed to send follow-up', 'error');
+      }
+    } catch {
+      showToast('Network error', 'error');
+    } finally {
+      setResending(false);
+    }
+  };
+
+  // Check if verification is allowed (10:00 AM – 12:00 AM)
+  const isVerificationAllowed = () => {
+    const now = new Date();
+    const hours = now.getHours();
+    return hours >= 10 && hours < 0; // 10 AM to 12 AM (midnight)
+  };
+
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!whatsappBusinessName.trim() || !whatsappNumber.trim()) {
+      showToast('Please fill in all fields', 'error');
+      return;
+    }
+    if (!isVerificationAllowed()) {
+      showToast('Verification available between 10:00 AM – 12:00 AM', 'error');
+      return;
+    }
+    
+    setSendingOtp(true);
+    try {
+      const res = await fetch('/api/whatsapp/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          action: 'send_otp',
+          businessName: whatsappBusinessName.trim(),
+          phoneNumber: whatsappNumber.trim(),
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setShowOtpInput(true);
+        showToast(`OTP sent to your WhatsApp number${json.otp ? ` (Demo OTP: ${json.otp})` : ''}`);
+      } else {
+        showToast(json.error || 'Failed to send OTP', 'error');
+      }
+    } catch {
+      showToast('Network error', 'error');
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpCode.trim() || otpCode.length !== 6) {
+      showToast('Please enter a valid 6-digit OTP', 'error');
+      return;
+    }
+    
+    setVerifyingOtp(true);
+    try {
+      const res = await fetch('/api/whatsapp/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          action: 'verify_otp',
+          otp: otpCode.trim(),
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        showToast('WhatsApp connection setup in progress. Usually completes within a few minutes (max 24 hours).', 'success');
+        setShowOtpInput(false);
+        setOtpCode('');
+        setWhatsappBusinessName('');
+        setWhatsappNumber('');
+        // Refresh user data to get updated status
+        await refresh();
+      } else {
+        showToast(json.error || 'Failed to verify OTP', 'error');
+      }
+    } catch {
+      showToast('Network error', 'error');
+    } finally {
+      setVerifyingOtp(false);
+    }
+  };
+
+  const getWhatsAppStatusBadge = () => {
+    const status = userData?.whatsapp_status || 'not_connected';
+    const map = {
+      not_connected: { label: 'Not Connected', color: '#ff4757', icon: XCircle },
+      pending_otp: { label: 'Pending OTP', color: '#fbbf24', icon: Clock },
+      setup_pending: { label: 'Setup in Progress', color: '#ff9f43', icon: Activity },
+      active: { label: 'Active', color: '#39ff87', icon: CheckCircle },
+    };
+    const s = map[status as keyof typeof map] || map.not_connected;
+    return { ...s, status };
+  };
+
+  const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    // Check if user has Pro plan
+    if (userData?.plan !== 'pro') {
+      showToast('CSV upload is available for Pro plan only', 'error');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const text = await file.text();
+      const lines = text.split('\n').filter(line => line.trim());
+      
+      // Skip header row if present
+      const dataLines = lines[0].toLowerCase().includes('name') ? lines.slice(1) : lines;
+      
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const line of dataLines) {
+        const parts = line.split(',').map(p => p.trim());
+        if (parts.length >= 2) {
+          const [name, phone] = parts;
+          
+          const res = await fetch('/api/send-message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              customerName: name,
+              customerPhone: phone,
+              message: `Hi ${name}! Thanks for visiting us today.\n\nHow was your experience?\n1️⃣  Excellent\n2️⃣  Good\n3️⃣  Not satisfied`,
+            }),
+          });
+          
+          if (res.ok) {
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        }
+      }
+
+      showToast(`CSV uploaded: ${successCount} messages sent${errorCount > 0 ? `, ${errorCount} failed` : ''}`);
+      await refresh();
+      setShowCsvUpload(false);
+    } catch {
+      showToast('Failed to parse CSV file', 'error');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-full">
+      {/* WhatsApp Connection Card */}
+      <div
+        className="glass-card p-6"
+        style={{ border: '1px solid rgba(57,255,135,0.15)' }}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ background: 'rgba(57,255,135,0.15)', border: '1px solid rgba(57,255,135,0.3)' }}
+            >
+              <MessageCircle size={20} className="text-[#39ff87]" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">Connect Your WhatsApp</h2>
+              <div className="flex items-center gap-2 mt-1">
+                {(() => {
+                  const badge = getWhatsAppStatusBadge();
+                  return (
+                    <span
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
+                      style={{ background: `${badge.color}20`, color: badge.color, border: `1px solid ${badge.color}40` }}
+                    >
+                      <badge.icon size={11} />
+                      {badge.label}
+                    </span>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+          <div
+            className="flex items-center gap-2 px-3 py-2 rounded-lg"
+            style={{ background: 'rgba(57,255,135,0.08)', border: '1px solid rgba(57,255,135,0.2)' }}
+          >
+            <Shield size={14} className="text-[#39ff87]" />
+            <span className="text-xs text-[#39ff87]">Verified</span>
+          </div>
+        </div>
+
+        {!showOtpInput ? (
+          <form onSubmit={handleSendOtp} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-white/50 mb-1.5 font-medium">Business Name</label>
+                <input
+                  type="text"
+                  value={whatsappBusinessName}
+                  onChange={(e) => setWhatsappBusinessName(e.target.value)}
+                  placeholder="Your Business Name"
+                  className="w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-white/25 transition-all"
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-white/50 mb-1.5 font-medium">WhatsApp Number</label>
+                <input
+                  type="tel"
+                  value={whatsappNumber}
+                  onChange={(e) => setWhatsappNumber(e.target.value)}
+                  placeholder="+91 98765 43210"
+                  className="w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-white/25 transition-all"
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}
+                />
+              </div>
+            </div>
+
+            <div className="text-xs text-white/40 flex items-center gap-1.5">
+              <Clock size={12} />
+              Verification available between 10:00 AM – 12:00 AM
+            </div>
+
+            <button
+              type="submit"
+              disabled={sendingOtp || !isVerificationAllowed()}
+              className="btn-neon-solid w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {sendingOtp ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                  Sending OTP...
+                </>
+              ) : (
+                <>
+                  <MessageCircle size={16} />
+                  Start Verification
+                </>
+              )}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleVerifyOtp} className="space-y-4">
+            <div className="text-center py-4">
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                style={{ background: 'rgba(57,255,135,0.08)', border: '1px solid rgba(57,255,135,0.2)' }}
+              >
+                <MessageCircle size={32} className="text-[#39ff87]" />
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2">Enter OTP</h3>
+              <p className="text-sm text-white/40">
+                We've sent a 6-digit OTP to {whatsappNumber}
+              </p>
+            </div>
+
+            <div>
+              <input
+                type="text"
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="Enter 6-digit OTP"
+                maxLength={6}
+                className="w-full px-4 py-3 rounded-xl text-lg text-white placeholder-white/25 text-center tracking-widest transition-all"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', letterSpacing: '0.5em' }}
+              />
+            </div>
+
+            <div className="text-xs text-white/40 text-center">
+              Setup usually completes within a few minutes (max 24 hours)
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowOtpInput(false)}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold text-white/60 hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={verifyingOtp}
+                className="flex-1 btn-neon-solid py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {verifyingOtp ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle size={16} />
+                    Verify OTP
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+
       {/* Toast */}
       {toast && (
         <div
@@ -373,9 +736,9 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: 'Total Requests', value: stats.total, icon: Users, color: '#39d9ff' },
-          { label: 'Positive', value: stats.positive, icon: ThumbsUp, color: '#39ff87' },
-          { label: 'Negative', value: stats.negative, icon: ThumbsDown, color: '#ff4757' },
-          { label: 'Pending', value: stats.pending, icon: Clock, color: '#fbbf24' },
+          { label: 'Happy', value: stats.positive, icon: ThumbsUp, color: '#39ff87' },
+          { label: 'Not Happy', value: stats.negative, icon: ThumbsDown, color: '#ff4757' },
+          { label: 'Waiting', value: stats.pending, icon: Clock, color: '#fbbf24' },
         ].map((s) => (
           <div
             key={s.label}
@@ -462,17 +825,67 @@ export default function DashboardPage() {
             className="glass-card p-6"
             style={{ border: '1px solid rgba(57,255,135,0.15)' }}
           >
-            <div className="flex items-center gap-2 mb-5">
-              <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center"
-                style={{ background: 'rgba(57,255,135,0.15)', border: '1px solid rgba(57,255,135,0.3)' }}
-              >
-                <Send size={13} className="text-[#39ff87]" />
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-7 h-7 rounded-lg flex items-center justify-center"
+                  style={{ background: 'rgba(57,255,135,0.15)', border: '1px solid rgba(57,255,135,0.3)' }}
+                >
+                  <Send size={13} className="text-[#39ff87]" />
+                </div>
+                <h2 className="text-sm font-bold text-white">Send Feedback Request</h2>
               </div>
-              <h2 className="text-sm font-bold text-white">Send Feedback Request</h2>
+              {userData?.plan === 'pro' && (
+                <button
+                  onClick={() => setShowCsvUpload(!showCsvUpload)}
+                  className="text-xs text-[#39ff87] hover:text-[#39ff87]/80 transition-colors flex items-center gap-1"
+                >
+                  <FileSpreadsheet size={12} />
+                  CSV Upload
+                </button>
+              )}
             </div>
 
+            {/* CSV Upload Section */}
+            {showCsvUpload && userData?.plan === 'pro' && (
+              <div className="mb-4 p-4 rounded-xl" style={{ background: 'rgba(57,255,135,0.05)', border: '1px solid rgba(57,255,135,0.2)' }}>
+                <div className="text-xs text-white/60 mb-2">
+                  Upload CSV file with columns: Name, Phone
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  onChange={handleCsvUpload}
+                  disabled={uploading}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-all disabled:opacity-50"
+                  style={{
+                    background: 'rgba(57,255,135,0.1)',
+                    border: '1px solid rgba(57,255,135,0.3)',
+                    color: '#39ff87',
+                  }}
+                >
+                  {uploading ? (
+                    <div className="w-4 h-4 border-2 border-[#39ff87]/30 border-t-[#39ff87] rounded-full animate-spin" />
+                  ) : (
+                    <Upload size={13} />
+                  )}
+                  {uploading ? 'Uploading...' : 'Select CSV File'}
+                </button>
+              </div>
+            )}
+
             <form onSubmit={sendRequest} className="space-y-4">
+              <div className="text-xs text-[#39ff87]/80 mb-3 flex items-center gap-1.5">
+                <Zap size={11} />
+                Messages are sent automatically. No typing needed.
+              </div>
+              
               <div>
                 <label className="block text-xs text-white/50 mb-1.5 font-medium">Customer Name</label>
                 <div className="relative">
@@ -570,7 +983,7 @@ export default function DashboardPage() {
               <div className="text-center py-8">
                 <MessageSquare size={28} className="text-white/10 mx-auto mb-2" />
                 <div className="text-sm text-white/30">No customers yet</div>
-                <div className="text-xs text-white/20 mt-1">Send your first feedback request</div>
+                <div className="text-xs text-white/20 mt-1">Send your first message</div>
               </div>
             ) : (
               <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
@@ -615,6 +1028,8 @@ export default function DashboardPage() {
                 key={selected.id}
                 customer={selected}
                 onRespond={handleRespond}
+                onResend={handleResend}
+                resending={resending}
               />
             </div>
           ) : (
@@ -628,9 +1043,9 @@ export default function DashboardPage() {
               >
                 <MessageSquare size={28} className="text-[#39ff87]" />
               </div>
-              <div className="text-white font-semibold mb-2">No conversation selected</div>
+              <div className="text-sm font-semibold text-white">No conversation selected</div>
               <div className="text-white/40 text-sm text-center max-w-xs">
-                Send a feedback request or select a customer from the activity panel to view their chat.
+                Send a message or select a customer to view their conversation.
               </div>
             </div>
           )}
