@@ -7,9 +7,9 @@ import { supabase } from '@/lib/supabase';
  * POST /api/whatsapp/connect
  * Body: { action: 'send_otp' | 'verify_otp', businessName: string, phoneNumber: string, otp?: string }
  * 
- * This endpoint handles WhatsApp connection setup:
- * - Send OTP: Saves business details and generates OTP (simulated)
- * - Verify OTP: Validates OTP and updates connection status
+ * This endpoint handles WhatsApp connection setup using the whatsapp_connections table:
+ * - send_otp: Insert or update row with status 'pending_otp'
+ * - verify_otp: Update status to 'setup_pending'
  */
 
 export async function POST(request: NextRequest) {
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
       // Check time restriction (10:00 AM – 12:00 AM)
       const now = new Date();
       const hours = now.getHours();
-      if (hours < 10 || hours >= 0) {
+      if (hours < 10) {
         return NextResponse.json({ 
           success: false, 
           error: 'Verification available between 10:00 AM – 12:00 AM' 
@@ -39,21 +39,47 @@ export async function POST(request: NextRequest) {
       // Generate random 6-digit OTP (simulated)
       const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
 
-      // Save to database with status 'pending_otp'
-      const { error } = await supabase
-        .from('users')
-        .update({
-          whatsapp_business_name: businessName,
-          whatsapp_number: phoneNumber,
-          whatsapp_otp: generatedOtp,
-          whatsapp_otp_sent_at: new Date().toISOString(),
-          whatsapp_status: 'pending_otp',
-        })
-        .eq('id', userId);
+      // Check if connection already exists for this user
+      const { data: existingConnection } = await supabase
+        .from('whatsapp_connections')
+        .select('id')
+        .eq('user_id', userId)
+        .single();
 
-      if (error) {
-        console.error('Error saving WhatsApp connection:', error);
-        return NextResponse.json({ success: false, error: 'Failed to save connection details' }, { status: 500 });
+      if (existingConnection) {
+        // Update existing connection
+        const { error } = await supabase
+          .from('whatsapp_connections')
+          .update({
+            business_name: businessName,
+            phone_number: phoneNumber,
+            otp: generatedOtp,
+            otp_sent_at: new Date().toISOString(),
+            status: 'pending_otp',
+          })
+          .eq('id', existingConnection.id);
+
+        if (error) {
+          console.error('Error updating WhatsApp connection:', error);
+          return NextResponse.json({ success: false, error: 'Failed to update connection details' }, { status: 500 });
+        }
+      } else {
+        // Insert new connection
+        const { error } = await supabase
+          .from('whatsapp_connections')
+          .insert({
+            user_id: userId,
+            business_name: businessName,
+            phone_number: phoneNumber,
+            otp: generatedOtp,
+            otp_sent_at: new Date().toISOString(),
+            status: 'pending_otp',
+          });
+
+        if (error) {
+          console.error('Error creating WhatsApp connection:', error);
+          return NextResponse.json({ success: false, error: 'Failed to create connection' }, { status: 500 });
+        }
       }
 
       // In real implementation, send OTP via WhatsApp API
@@ -72,29 +98,29 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, error: 'Invalid OTP' }, { status: 400 });
       }
 
-      // Verify OTP
-      const { data: userData, error: fetchError } = await supabase
-        .from('users')
-        .select('whatsapp_otp, whatsapp_status')
-        .eq('id', userId)
+      // Get user's WhatsApp connection
+      const { data: connection, error: fetchError } = await supabase
+        .from('whatsapp_connections')
+        .select('otp, status')
+        .eq('user_id', userId)
         .single();
 
-      if (fetchError || !userData) {
-        return NextResponse.json({ success: false, error: 'Failed to fetch user data' }, { status: 500 });
+      if (fetchError || !connection) {
+        return NextResponse.json({ success: false, error: 'Connection not found. Please start verification first.' }, { status: 404 });
       }
 
-      if (userData.whatsapp_otp !== otp) {
+      if (connection.otp !== otp) {
         return NextResponse.json({ success: false, error: 'Invalid OTP' }, { status: 400 });
       }
 
       // Update status to 'setup_pending'
       const { error: updateError } = await supabase
-        .from('users')
+        .from('whatsapp_connections')
         .update({
-          whatsapp_status: 'setup_pending',
-          whatsapp_otp: null, // Clear OTP after verification
+          status: 'setup_pending',
+          otp: null, // Clear OTP after verification
         })
-        .eq('id', userId);
+        .eq('user_id', userId);
 
       if (updateError) {
         console.error('Error updating WhatsApp status:', updateError);
