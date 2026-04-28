@@ -6,9 +6,33 @@ import { useRouter } from 'next/navigation';
 export function useUser() {
   const [user, setUser] = useState<any>(null);
   const [userData, setUserData] = useState<any>(null);
+  const [whatsappConnection, setWhatsappConnection] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+
+  const fetchWhatsappConnection = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('whatsapp_connections')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+      
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // No rows returned - connection doesn't exist
+          setWhatsappConnection(null);
+        } else {
+          console.error('Error fetching WhatsApp connection:', error);
+        }
+      } else {
+        setWhatsappConnection(data);
+      }
+    } catch (err) {
+      console.error('Error fetching WhatsApp connection:', err);
+    }
+  };
 
   useEffect(() => {
     const loadUser = async () => {
@@ -23,6 +47,7 @@ export function useUser() {
           console.log('useUser: No session found');
           setUser(null);
           setUserData(null);
+          setWhatsappConnection(null);
           return;
         }
 
@@ -44,6 +69,9 @@ export function useUser() {
             messages_used: 0,
           });
         }
+
+        // Fetch WhatsApp connection data
+        await fetchWhatsappConnection(session.user.id);
       } catch (err) {
         console.error('useUser: Error loading user:', err);
         setError('Failed to load user data');
@@ -60,6 +88,7 @@ export function useUser() {
         console.log('useUser: Auth state changed - no session');
         setUser(null);
         setUserData(null);
+        setWhatsappConnection(null);
         router.push('/login');
       } else {
         console.log('useUser: Auth state changed - session exists');
@@ -76,6 +105,7 @@ export function useUser() {
               });
             }
           })
+          .then(() => fetchWhatsappConnection(session.user.id))
           .catch(err => console.error('useUser: Error fetching user data on auth change:', err));
       }
     });
@@ -98,6 +128,7 @@ export function useUser() {
   return {
     user,
     userData: safeUserData,
+    whatsappConnection,
     loading,
     error,
     usagePercentage,
@@ -109,6 +140,7 @@ export function useUser() {
             setUserData(data);
           }
         });
+        fetchWhatsappConnection(user.id);
       }
     },
   };
