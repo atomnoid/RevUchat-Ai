@@ -1,6 +1,7 @@
 -- Create whatsapp_connections table for WhatsApp onboarding
 -- This table stores WhatsApp connection details separate from users table
 
+-- Create table if it doesn't exist
 CREATE TABLE IF NOT EXISTS whatsapp_connections (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -14,7 +15,49 @@ CREATE TABLE IF NOT EXISTS whatsapp_connections (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Add missing columns if they don't exist (for partial migrations)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'whatsapp_connections' AND column_name = 'otp'
+    ) THEN
+        ALTER TABLE whatsapp_connections ADD COLUMN otp TEXT;
+    END IF;
+    
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'whatsapp_connections' AND column_name = 'otp_sent_at'
+    ) THEN
+        ALTER TABLE whatsapp_connections ADD COLUMN otp_sent_at TIMESTAMP WITH TIME ZONE;
+    END IF;
+    
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'whatsapp_connections' AND column_name = 'connected_at'
+    ) THEN
+        ALTER TABLE whatsapp_connections ADD COLUMN connected_at TIMESTAMP WITH TIME ZONE;
+    END IF;
+    
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'whatsapp_connections' AND column_name = 'created_at'
+    ) THEN
+        ALTER TABLE whatsapp_connections ADD COLUMN created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+    END IF;
+    
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'whatsapp_connections' AND column_name = 'updated_at'
+    ) THEN
+        ALTER TABLE whatsapp_connections ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+    END IF;
+END $$;
+
 -- Add check constraint for status values
+ALTER TABLE whatsapp_connections
+DROP CONSTRAINT IF EXISTS check_whatsapp_status;
+
 ALTER TABLE whatsapp_connections
 ADD CONSTRAINT check_whatsapp_status 
 CHECK (status IN ('not_connected', 'pending_otp', 'setup_pending', 'active'));
