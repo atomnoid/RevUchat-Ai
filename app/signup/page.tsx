@@ -16,6 +16,7 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [cooldown, setCooldown] = useState(false);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,17 +42,29 @@ export default function SignupPage() {
       console.log('Signup response:', { data, error: signUpError });
 
       if (signUpError) {
-        setError(signUpError.message);
+        // Handle specific error messages
+        if (signUpError.message.includes('over_email_send_rate_limit') || signUpError.message.includes('rate limit')) {
+          setError('Too many attempts. Please try again after a few minutes.');
+        } else if (signUpError.message.includes('User already registered') || signUpError.message.includes('already registered')) {
+          setError('Account already exists. Please sign in.');
+        } else if (signUpError.message.includes('Failed to fetch') || signUpError.message.includes('network')) {
+          setError('Network issue. Please check your connection.');
+        } else {
+          setError('An error occurred. Please try again.');
+        }
         return;
       }
 
       if (data.user) {
-        // Show success message instead of redirecting
+        // Show success message
         setSuccess(true);
+        // Start cooldown to prevent spam
+        setCooldown(true);
+        setTimeout(() => setCooldown(false), 60000); // 60 second cooldown
       }
     } catch (err) {
       console.error('Signup error:', err);
-      setError('An unexpected error occurred. Please try again.');
+      setError('Network issue. Please check your connection.');
     } finally {
       setLoading(false);
     }
@@ -78,7 +91,7 @@ export default function SignupPage() {
             </span>
           </Link>
           <h1 className="text-3xl font-black text-white">Create your account</h1>
-          <p className="text-white/40 text-sm mt-2">Start your 14-day free trial</p>
+          <p className="text-white/40 text-sm mt-2">Get started with RevUchat AI</p>
         </div>
 
         {/* Card */}
@@ -160,17 +173,22 @@ export default function SignupPage() {
 
             {success && (
               <div className="text-sm text-[#39ff87] bg-[#39ff87]/10 border border-[#39ff87]/20 rounded-lg px-4 py-3">
-                Signup successful! Please check your email to verify your account.
+                Verification email sent. Please check your inbox to activate your account.
               </div>
             )}
 
             <button
               type="submit"
-              disabled={loading || success}
+              disabled={loading || success || cooldown}
               className="btn-neon-solid w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 group disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+              ) : cooldown ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                  Please wait...
+                </>
               ) : (
                 <>
                   Create Account
