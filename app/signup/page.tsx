@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import CyberBackground from '@/components/CyberBackground';
-import { Bot, Eye, EyeOff, ArrowRight, Lock, Mail, User } from 'lucide-react';
+import { Bot, Eye, EyeOff, ArrowRight, Lock, Mail, User, Info } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 export default function SignupPage() {
@@ -15,10 +15,12 @@ export default function SignupPage() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccess(false);
     setLoading(true);
 
     try {
@@ -44,8 +46,8 @@ export default function SignupPage() {
       }
 
       if (data.user) {
-        // User record will be created automatically by trigger
-        router.push('/dashboard');
+        // Show success message instead of redirecting
+        setSuccess(true);
       }
     } catch (err) {
       console.error('Signup error:', err);
@@ -156,9 +158,15 @@ export default function SignupPage() {
               </div>
             )}
 
+            {success && (
+              <div className="text-sm text-[#39ff87] bg-[#39ff87]/10 border border-[#39ff87]/20 rounded-lg px-4 py-3">
+                Signup successful! Please check your email to verify your account.
+              </div>
+            )}
+
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || success}
               className="btn-neon-solid w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 group disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {loading ? (
@@ -170,6 +178,11 @@ export default function SignupPage() {
                 </>
               )}
             </button>
+
+            <div className="flex items-center gap-2 text-xs text-white/40">
+              <Info size={12} />
+              <span>A verification email will be sent to your email address after signup.</span>
+            </div>
           </form>
 
           <div className="mt-6 pt-6" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
