@@ -801,7 +801,7 @@ export default function DashboardPage() {
       {/* Toast */}
       {toast && (
         <div
-          className="fixed top-5 right-5 z-[100] flex items-center gap-3 px-5 py-3 rounded-xl text-sm font-medium animate-fade-in-up"
+          className="fixed top-24 right-5 z-[100] flex items-center gap-3 px-5 py-3 rounded-xl text-sm font-medium animate-fade-in-up"
           style={{
             background: toast.type === 'success' ? 'rgba(57,255,135,0.12)' : 'rgba(255,71,87,0.12)',
             border: `1px solid ${toast.type === 'success' ? 'rgba(57,255,135,0.4)' : 'rgba(255,71,87,0.4)'}`,
