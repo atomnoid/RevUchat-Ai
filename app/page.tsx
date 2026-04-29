@@ -112,7 +112,7 @@ const plans = [
       'Basic Analytics',
       'Email Support'
     ],
-    cta: 'Start Free Trial',
+    cta: 'Get Started',
     featured: false,
   },
   {
@@ -126,7 +126,7 @@ const plans = [
       'Advanced Analytics',
       'Priority Support'
     ],
-    cta: 'Start Free Trial',
+    cta: 'Get Started',
     featured: true,
   },
   {
@@ -140,7 +140,7 @@ const plans = [
       'Advanced Analytics',
       'Priority Support'
     ],
-    cta: 'Start Free Trial',
+    cta: 'Get Started',
     featured: false,
   },
   {
@@ -376,7 +376,7 @@ export default function LandingPage() {
         <div className="text-center mb-16">
           <div className="text-xs font-semibold tracking-widest uppercase neon-text mb-3">Pricing</div>
           <h2 className="text-4xl font-black text-white">Simple, transparent pricing</h2>
-          <p className="text-white/40 mt-3">14-day free trial. No credit card required.</p>
+          <p className="text-white/40 mt-3">Choose the plan that fits your business needs.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
