@@ -34,7 +34,7 @@ export function useMessages(userId: string | null, customerId?: string) {
         throw fetchError;
       }
       
-      console.log('useMessages: Messages fetched:', data);
+      // console.log('useMessages: Messages fetched:', data);
       setMessages(data || []);
     } catch (err) {
       console.error('useMessages: Error fetching messages:', err);
