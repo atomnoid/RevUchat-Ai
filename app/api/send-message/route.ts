@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { sendMessage } from '@/services/messagingService';
 import { rateLimit } from '@/lib/rateLimiter';
+import { sendMessageSchema } from '@/lib/validators';
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,22 +22,24 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { customerName, customerPhone, message } = body;
 
-    if (!customerName || !customerPhone || !message) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    // Validate input using Zod
+    const validationResult = sendMessageSchema.safeParse(body);
+    
+    if (!validationResult.success) {
+      return NextResponse.json({ 
+        error: 'Invalid input data',
+        details: validationResult.error.errors 
+      }, { status: 400 });
     }
 
-    // Sanitize inputs
-    const sanitizedName = customerName.trim().slice(0, 100);
-    const sanitizedPhone = customerPhone.trim().slice(0, 20);
-    const sanitizedMessage = message.trim().slice(0, 1000);
+    const { customerName, customerPhone, message } = validationResult.data;
 
     const result = await sendMessage({
       userId: session.user.id,
-      customerName: sanitizedName,
-      customerPhone: sanitizedPhone,
-      message: sanitizedMessage,
+      customerName,
+      customerPhone,
+      message,
     });
 
     if (!result.success) {

@@ -1,11 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { rateLimit } from '@/lib/rateLimiter';
+import { customerUpdateSchema } from '@/lib/validators';
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    // Rate limiting
+    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    const rateLimitResult = rateLimit(ip, 15, 60000);
+    
+    if (!rateLimitResult.success) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    }
+
     // Get user session
     const { data: { session } } = await supabase.auth.getSession();
     
@@ -14,11 +24,18 @@ export async function PATCH(
     }
 
     const body = await req.json();
-    const { status } = body;
 
-    if (!['pending', 'positive', 'negative'].includes(status)) {
-      return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
+    // Validate input using Zod
+    const validationResult = customerUpdateSchema.safeParse(body);
+    
+    if (!validationResult.success) {
+      return NextResponse.json({ 
+        error: 'Invalid input data',
+        details: validationResult.error.errors 
+      }, { status: 400 });
     }
+
+    const { status } = validationResult.data;
 
     // Verify customer belongs to user
     const { data: customer, error: checkError } = await supabase

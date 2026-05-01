@@ -28,6 +28,16 @@ export default function LoginPage() {
 
       if (signInError) {
         setError(signInError.message);
+        // Log failed auth attempt
+        try {
+          await fetch('/api/log-auth-failure', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+          });
+        } catch (logError) {
+          // Silently fail logging
+        }
         return;
       }
 

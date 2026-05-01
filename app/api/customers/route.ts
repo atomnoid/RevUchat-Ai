@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { rateLimit } from '@/lib/rateLimiter';
+import { customerSchema } from '@/lib/validators';
 
 export async function GET(req: NextRequest) {
   try {
@@ -50,19 +51,22 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, phone } = body;
 
-    if (!name || !phone) {
-      return NextResponse.json({ error: 'Name and phone are required' }, { status: 400 });
+    // Validate input using Zod
+    const validationResult = customerSchema.safeParse(body);
+    
+    if (!validationResult.success) {
+      return NextResponse.json({ 
+        error: 'Invalid input data',
+        details: validationResult.error.errors 
+      }, { status: 400 });
     }
 
-    // Sanitize inputs
-    const sanitizedName = name.trim().slice(0, 100);
-    const sanitizedPhone = phone.trim().slice(0, 20);
+    const { name, phone } = validationResult.data;
 
     const { data, error } = await supabase
       .from('customers')
-      .insert([{ name: sanitizedName, phone: sanitizedPhone, status: 'pending', user_id: session.user.id }])
+      .insert([{ name, phone, status: 'pending', user_id: session.user.id }])
       .select()
       .single();
 

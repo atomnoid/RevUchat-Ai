@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { rateLimit } from '@/lib/rateLimiter';
+import { whatsappConnectRequestSchema } from '@/lib/validators';
 import { createClient } from '@supabase/supabase-js';
 
 /**
@@ -26,7 +27,19 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { action, businessName, phoneNumber } = body;
+
+    // Validate input using Zod
+    const validationResult = whatsappConnectRequestSchema.safeParse(body);
+    
+    if (!validationResult.success) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Invalid input data',
+        details: validationResult.error.errors 
+      }, { status: 400 });
+    }
+
+    const { action, businessName, phoneNumber } = validationResult.data;
 
     // Get authorization header
     const authHeader = request.headers.get('authorization');
@@ -61,23 +74,12 @@ export async function POST(request: NextRequest) {
     const userId = user.id;
 
     if (action === 'start_verification' || action === 'retry_verification') {
-      // Validate inputs
-      if (!businessName || !phoneNumber) {
-        return NextResponse.json({ success: false, error: 'Business name and phone number are required' }, { status: 400 });
-      }
-
-      // Sanitize inputs
-      const sanitizedName = businessName.trim().slice(0, 100);
-      const sanitizedPhone = phoneNumber.trim().slice(0, 20);
-
       // Check if connection already exists
       const { data: existingConnection, error: fetchError } = await supabase
         .from('whatsapp_connections')
         .select('*')
         .eq('user_id', userId)
         .single();
-
-      // console.log('Existing connection check:', { existingConnection, fetchError });
 
       if (action === 'retry_verification') {
         // Check if 1 hour has passed since last update
@@ -100,8 +102,8 @@ export async function POST(request: NextRequest) {
         const { error } = await supabase
           .from('whatsapp_connections')
           .update({
-            business_name: sanitizedName,
-            phone_number: sanitizedPhone,
+            business_name: businessName,
+            phone_number: phoneNumber,
             status: 'pending_call',
             updated_at: new Date().toISOString(),
           })
@@ -116,8 +118,8 @@ export async function POST(request: NextRequest) {
           .from('whatsapp_connections')
           .insert({
             user_id: userId,
-            business_name: sanitizedName,
-            phone_number: sanitizedPhone,
+            business_name: businessName,
+            phone_number: phoneNumber,
             status: 'pending_call',
           });
 

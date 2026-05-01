@@ -50,8 +50,22 @@ export default function SignupPage() {
         } else if (signUpError.message.includes('Failed to fetch') || signUpError.message.includes('network')) {
           setError('Network issue. Please check your connection.');
         } else {
-          setError('An error occurred. Please try again.');
+          setError('Something went wrong. Please try again.');
         }
+        
+        // Log failed auth attempt
+        try {
+          await fetch('/api/log-auth-failure', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+          });
+        } catch (logError) {
+          // Silently fail logging
+        }
+        
+        setCooldown(true);
+        setTimeout(() => setCooldown(false), 60000);
         return;
       }
 

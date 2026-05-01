@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { rateLimit } from '@/lib/rateLimiter';
+import { simulateResponseSchema } from '@/lib/validators';
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,11 +21,18 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { customerId, response } = body;
 
-    if (!customerId || !response) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    // Validate input using Zod
+    const validationResult = simulateResponseSchema.safeParse(body);
+    
+    if (!validationResult.success) {
+      return NextResponse.json({ 
+        error: 'Invalid input data',
+        details: validationResult.error.errors 
+      }, { status: 400 });
     }
+
+    const { customerId, response } = validationResult.data;
 
     // Verify customer belongs to user
     const { data: customer, error: customerError } = await supabase
