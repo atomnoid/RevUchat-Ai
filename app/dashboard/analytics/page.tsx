@@ -98,9 +98,9 @@ export default function AnalyticsPage() {
     
     if (showRefresh) setRefreshing(true);
     try {
-      console.log('Fetching analytics data for user:', userId);
+      // console.log('Fetching analytics data for user:', userId);
       const data = await getCustomers(userId);
-      console.log('Analytics data fetched:', data);
+      // console.log('Analytics data fetched:', data);
       setCustomers(data);
     } catch (err) {
       console.error('Error fetching analytics data:', err);
@@ -115,13 +115,13 @@ export default function AnalyticsPage() {
     // Get current user
     const getCurrentUser = async () => {
       try {
-        console.log('Fetching current user for analytics...');
+        // console.log('Fetching current user for analytics...');
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          console.log('Current user found for analytics:', session.user.id);
+          // console.log('Current user found for analytics:', session.user.id);
           setUserId(session.user.id);
         } else {
-          console.log('No current user found for analytics');
+          // console.log('No current user found for analytics');
         }
       } catch (err) {
         console.error('Error getting current user for analytics:', err);
