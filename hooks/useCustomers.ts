@@ -16,9 +16,9 @@ export function useCustomers(userId: string | null) {
     try {
       setLoading(true);
       setError(null);
-      console.log('useCustomers: Fetching customers for user:', userId);
+      // console.log('useCustomers: Fetching customers for user:', userId);
       const data = await getCustomers(userId);
-      console.log('useCustomers: Customers fetched:', data);
+      // console.log('useCustomers: Customers fetched:', data);
       setCustomers(data);
     } catch (err) {
       console.error('useCustomers: Error fetching customers:', err);
