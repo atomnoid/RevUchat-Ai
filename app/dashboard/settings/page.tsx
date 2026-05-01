@@ -63,7 +63,7 @@ const plans = [
  */
 async function handlePaymentSuccess(userId: string, newPlan: string, newLimit: number) {
   // Placeholder logic
-  console.log(`Payment successful for user ${userId}, upgrading to ${newPlan}`);
+  // console.log(`Payment successful for user ${userId}, upgrading to ${newPlan}`);
   
   // FUTURE: This will be called by payment provider webhook
   // const { error } = await supabase
@@ -85,15 +85,15 @@ export default function SettingsPage() {
     const loadUserData = async () => {
       try {
         setLoading(true);
-        console.log('Fetching user data for settings...');
+        // console.log('Fetching user data for settings...');
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          console.log('User found for settings:', session.user.id);
+          // console.log('User found for settings:', session.user.id);
           const data = await getUserData(session.user.id);
-          console.log('User data for settings:', data);
+          // console.log('User data for settings:', data);
           setUserData(data);
         } else {
-          console.log('No user found for settings');
+          // console.log('No user found for settings');
         }
       } catch (err) {
         console.error('Error loading user data for settings:', err);
