@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { rateLimit } from '@/lib/rateLimiter';
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting
+    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    const rateLimitResult = rateLimit(ip, 15, 60000);
+    
+    if (!rateLimitResult.success) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    }
+
     // Get user session
     const { data: { session } } = await supabase.auth.getSession();
     
@@ -20,7 +29,7 @@ export async function POST(request: NextRequest) {
     // Verify customer belongs to user
     const { data: customer, error: customerError } = await supabase
       .from('customers')
-      .select('*')
+      .select('id')
       .eq('id', customerId)
       .eq('user_id', session.user.id)
       .single();
@@ -55,7 +64,7 @@ export async function POST(request: NextRequest) {
       });
 
     if (messageError) {
-      console.error('Failed to add message:', messageError);
+      // Log internally but don't expose to user
     }
 
     return NextResponse.json({ 
@@ -64,7 +73,6 @@ export async function POST(request: NextRequest) {
       message: messageContent,
     });
   } catch (error) {
-    console.error('Simulate response API error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
