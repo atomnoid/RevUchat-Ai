@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
+import { rateLimit } from '@/lib/rateLimiter';
 import { createClient } from '@supabase/supabase-js';
 
 /**
@@ -15,15 +17,20 @@ import { createClient } from '@supabase/supabase-js';
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting
+    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    const rateLimitResult = rateLimit(ip, 5, 60000);
+    
+    if (!rateLimitResult.success) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+    }
+
     const body = await request.json();
     const { action, businessName, phoneNumber } = body;
-
-    // console.log('WhatsApp connect API called:', { action, businessName, phoneNumber });
 
     // Get authorization header
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.error('No authorization header found');
       return NextResponse.json({ success: false, error: 'Unauthorized - No authorization header' }, { status: 401 });
     }
 
@@ -48,18 +55,20 @@ export async function POST(request: NextRequest) {
     // console.log('User check:', { user: !!user, userError });
     
     if (!user || userError) {
-      console.error('Invalid token or user not found');
       return NextResponse.json({ success: false, error: 'Unauthorized - Invalid token' }, { status: 401 });
     }
 
     const userId = user.id;
-    // console.log('User ID:', userId);
 
     if (action === 'start_verification' || action === 'retry_verification') {
       // Validate inputs
       if (!businessName || !phoneNumber) {
         return NextResponse.json({ success: false, error: 'Business name and phone number are required' }, { status: 400 });
       }
+
+      // Sanitize inputs
+      const sanitizedName = businessName.trim().slice(0, 100);
+      const sanitizedPhone = phoneNumber.trim().slice(0, 20);
 
       // Check if connection already exists
       const { data: existingConnection, error: fetchError } = await supabase
@@ -91,18 +100,15 @@ export async function POST(request: NextRequest) {
         const { error } = await supabase
           .from('whatsapp_connections')
           .update({
-            business_name: businessName,
-            phone_number: phoneNumber,
+            business_name: sanitizedName,
+            phone_number: sanitizedPhone,
             status: 'pending_call',
             updated_at: new Date().toISOString(),
           })
           .eq('id', existingConnection.id);
 
-        // console.log('Update connection result:', { error });
-
         if (error) {
-          console.error('Error updating WhatsApp connection:', error);
-          return NextResponse.json({ success: false, error: `Failed to update connection: ${error.message}` }, { status: 500 });
+          return NextResponse.json({ success: false, error: 'Failed to update connection' }, { status: 500 });
         }
       } else {
         // Insert new connection
@@ -110,16 +116,13 @@ export async function POST(request: NextRequest) {
           .from('whatsapp_connections')
           .insert({
             user_id: userId,
-            business_name: businessName,
-            phone_number: phoneNumber,
+            business_name: sanitizedName,
+            phone_number: sanitizedPhone,
             status: 'pending_call',
           });
 
-        // console.log('Insert connection result:', { error });
-
         if (error) {
-          console.error('Error creating WhatsApp connection:', error);
-          return NextResponse.json({ success: false, error: `Failed to create connection: ${error.message}` }, { status: 500 });
+          return NextResponse.json({ success: false, error: 'Failed to create connection' }, { status: 500 });
         }
       }
 
@@ -131,7 +134,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: false, error: 'Invalid action' }, { status: 400 });
   } catch (error) {
-    console.error('WhatsApp connect API error:', error);
     return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
   }
 }
