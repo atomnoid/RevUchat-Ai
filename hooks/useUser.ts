@@ -40,29 +40,29 @@ export function useUser() {
         setLoading(true);
         setError(null);
         
-        console.log('useUser: Fetching auth session...');
+        // console.log('useUser: Fetching auth session...');
         const { data: { session } } = await supabase.auth.getSession();
         
         if (!session) {
-          console.log('useUser: No session found');
+          // console.log('useUser: No session found');
           setUser(null);
           setUserData(null);
           setWhatsappConnection(null);
           return;
         }
 
-        console.log('useUser: Session found, user:', session.user.id);
+        // console.log('useUser: Session found, user:', session.user.id);
         setUser(session.user);
         
         // Load user data from users table
-        console.log('useUser: Fetching user data from database...');
+        // console.log('useUser: Fetching user data from database...');
         const data = await getUserData(session.user.id);
         
         if (data) {
-          console.log('useUser: User data loaded:', data);
+          // console.log('useUser: User data loaded:', data);
           setUserData(data);
         } else {
-          console.log('useUser: No user data found, using defaults');
+          // console.log('useUser: No user data found, using defaults');
           setUserData({
             plan: 'starter',
             message_limit: 200,
@@ -85,13 +85,13 @@ export function useUser() {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
-        console.log('useUser: Auth state changed - no session');
+        // console.log('useUser: Auth state changed - no session');
         setUser(null);
         setUserData(null);
         setWhatsappConnection(null);
         router.push('/login');
       } else {
-        console.log('useUser: Auth state changed - session exists');
+        // console.log('useUser: Auth state changed - session exists');
         setUser(session.user);
         getUserData(session.user.id)
           .then(data => {
