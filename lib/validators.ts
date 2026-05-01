@@ -1,5 +1,16 @@
 import { z } from 'zod';
 
+// Login validation schema
+export const loginSchema = z.object({
+  email: z.string()
+    .email('Invalid email format')
+    .trim()
+    .toLowerCase(),
+  password: z.string()
+    .min(6, 'Password must be at least 6 characters')
+    .max(100, 'Password must be at most 100 characters'),
+});
+
 // Signup validation schema
 export const signupSchema = z.object({
   name: z.string()
@@ -96,16 +107,6 @@ export const whatsappConnectRequestSchema = z.object({
     .min(8, 'Phone number must be at least 8 characters')
     .max(15, 'Phone number must be at most 15 characters')
     .trim(),
-});
-
-// Login schema
-export const loginSchema = z.object({
-  email: z.string()
-    .email('Invalid email format')
-    .trim()
-    .toLowerCase(),
-  password: z.string()
-    .min(1, 'Password is required'),
 });
 
 // Type exports
