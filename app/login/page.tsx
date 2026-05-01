@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import CyberBackground from '@/components/CyberBackground';
 import { Bot, Eye, EyeOff, ArrowRight, Lock, Mail } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { loginSchema } from '@/lib/validators';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,13 +22,45 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      // Validate input using login schema
+      const validationResult = loginSchema.safeParse({ email, password });
+      if (!validationResult.success) {
+        const firstError = validationResult.error.errors[0]?.message;
+        setError(firstError || 'Invalid input');
+        setLoading(false);
+        return;
+      }
+
+      console.log('[LOGIN] Attempting signInWithPassword for:', email);
+
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
+      console.log('[LOGIN] Supabase response:', { data, error: signInError });
+
       if (signInError) {
-        setError(signInError.message);
+        // Handle specific error messages with user-friendly responses
+        const errorMsg = signInError.message.toLowerCase();
+        
+        if (errorMsg.includes('invalid login credentials') || 
+            errorMsg.includes('invalid email or password') ||
+            errorMsg.includes('wrong') ||
+            errorMsg.includes('invalid_credentials')) {
+          setError('Invalid email or password');
+        } else if (errorMsg.includes('email not confirmed') || 
+                   errorMsg.includes('email_not_confirmed') ||
+                   errorMsg.includes('not verified')) {
+          setError('Please verify your email before logging in');
+        } else if (errorMsg.includes('rate limit') || errorMsg.includes('too many requests')) {
+          setError('Too many attempts. Please try again later.');
+        } else {
+          // Generic fallback - log for debugging but show user-friendly message
+          console.error('[LOGIN] Auth error:', signInError.message);
+          setError('Unable to sign in. Please check your credentials and try again.');
+        }
+        
         // Log failed auth attempt
         try {
           await fetch('/api/log-auth-failure', {
@@ -38,13 +71,16 @@ export default function LoginPage() {
         } catch (logError) {
           // Silently fail logging
         }
+        setLoading(false);
         return;
       }
 
       if (data.user) {
+        console.log('[LOGIN] Success for user:', data.user.id);
         router.push('/dashboard');
       }
     } catch (err) {
+      console.error('[LOGIN] Unexpected error:', err);
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
