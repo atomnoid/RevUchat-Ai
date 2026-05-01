@@ -26,7 +26,7 @@ export default function SignupPage() {
 
     try {
       const redirectUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://revuchat-ai.vercel.app';
-      console.log('Signup redirect URL:', redirectUrl);
+      // console.log('Signup redirect URL:', redirectUrl);
 
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
@@ -39,7 +39,7 @@ export default function SignupPage() {
         },
       });
 
-      console.log('Signup response:', { data, error: signUpError });
+      // console.log('Signup response:', { data, error: signUpError });
 
       if (signUpError) {
         // Handle specific error messages
