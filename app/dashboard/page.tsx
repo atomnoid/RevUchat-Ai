@@ -234,14 +234,13 @@ function ChatWindow({ customer, onRespond, onResend, resending }: { customer: Cu
             Resend / Follow-up
           </button>
           <div className="text-xs text-white/30 mt-2 text-center">
-            This will allow you to resend the message to customers who haven't responded
+            This will allow you to resend the message to customers who haven&apos;t responded
           </div>
         </div>
       )}
     </div>
   );
 }
-
 export default function DashboardPage() {
   const { user, userData, whatsappConnection, isLimitReached, refresh } = useUser();
   const { customers, loading, stats, refresh: refreshCustomers } = useCustomers(user?.id || null);
@@ -289,7 +288,7 @@ export default function DashboardPage() {
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
-          console.log('WhatsApp connection changed:', payload);
+          // console.log('WhatsApp connection changed:', payload);
           refresh();
         }
       )
