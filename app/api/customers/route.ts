@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { rateLimit } from '@/lib/rateLimiter';
 
 export async function GET(req: NextRequest) {
   try {
+    // Rate limiting
+    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    const rateLimitResult = rateLimit(ip, 20, 60000);
+    
+    if (!rateLimitResult.success) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    }
+
     // Get user session
     const { data: { session } } = await supabase.auth.getSession();
     
@@ -25,6 +34,14 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    // Rate limiting
+    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    const rateLimitResult = rateLimit(ip, 10, 60000);
+    
+    if (!rateLimitResult.success) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    }
+
     // Get user session
     const { data: { session } } = await supabase.auth.getSession();
     
@@ -39,9 +56,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Name and phone are required' }, { status: 400 });
     }
 
+    // Sanitize inputs
+    const sanitizedName = name.trim().slice(0, 100);
+    const sanitizedPhone = phone.trim().slice(0, 20);
+
     const { data, error } = await supabase
       .from('customers')
-      .insert([{ name, phone, status: 'pending', user_id: session.user.id }])
+      .insert([{ name: sanitizedName, phone: sanitizedPhone, status: 'pending', user_id: session.user.id }])
       .select()
       .single();
 
