@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { action, businessName, phoneNumber } = body;
 
-    console.log('WhatsApp connect API called:', { action, businessName, phoneNumber });
+    // console.log('WhatsApp connect API called:', { action, businessName, phoneNumber });
 
     // Get authorization header
     const authHeader = request.headers.get('authorization');
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     // Verify the token and get user
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     
-    console.log('User check:', { user: !!user, userError });
+    // console.log('User check:', { user: !!user, userError });
     
     if (!user || userError) {
       console.error('Invalid token or user not found');
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     }
 
     const userId = user.id;
-    console.log('User ID:', userId);
+    // console.log('User ID:', userId);
 
     if (action === 'start_verification' || action === 'retry_verification') {
       // Validate inputs
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
         .eq('user_id', userId)
         .single();
 
-      console.log('Existing connection check:', { existingConnection, fetchError });
+      // console.log('Existing connection check:', { existingConnection, fetchError });
 
       if (action === 'retry_verification') {
         // Check if 1 hour has passed since last update
@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
           })
           .eq('id', existingConnection.id);
 
-        console.log('Update connection result:', { error });
+        // console.log('Update connection result:', { error });
 
         if (error) {
           console.error('Error updating WhatsApp connection:', error);
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
             status: 'pending_call',
           });
 
-        console.log('Insert connection result:', { error });
+        // console.log('Insert connection result:', { error });
 
         if (error) {
           console.error('Error creating WhatsApp connection:', error);
