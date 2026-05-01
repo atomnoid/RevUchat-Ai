@@ -27,7 +27,7 @@ export function useAuth() {
 
 export async function getCurrentUser() {
   const { data: { user } } = await supabase.auth.getUser();
-  console.log('Auth user:', user);
+  // const user = data.user;
   return user;
 }
 
@@ -43,7 +43,7 @@ export async function getUserData(userId: string) {
     return null;
   }
 
-  console.log('User data:', data);
+  // const data = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
   return data;
 }
 
