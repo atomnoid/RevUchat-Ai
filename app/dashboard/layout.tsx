@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import CyberBackground from '@/components/CyberBackground';
@@ -15,17 +15,40 @@ const navItems = [
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  console.log('[DASHBOARD] DashboardLayout component mounted');
+
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, userData, loading, error, usagePercentage, isLimitReached } = useUser();
+
+  console.log('[DASHBOARD] useUser hook result:', {
+    user: !!user,
+    userId: user?.id,
+    loading,
+    error: !!error,
+    pathname
+  });
+
+  // Add a timeout to prevent infinite loading
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
+  useEffect(() => {
+    if (loading) {
+      console.log('DashboardLayout: Starting loading timeout (5s)');
+      const timer = setTimeout(() => {
+        console.log('Dashboard: Loading timeout reached, forcing redirect check');
+        setLoadingTimeout(true);
+      }, 5000); // 5 second timeout
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
 
   const handleLogout = async () => {
     await logout();
     router.push('/login');
   };
 
-  if (loading) {
+  if (loading && !loadingTimeout) {
     return (
       <div className="relative min-h-screen flex items-center justify-center">
         <CyberBackground />
@@ -37,26 +60,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  if (error) {
+  if (error || loadingTimeout || !user) {
+    console.log('Dashboard: No user or error, showing login redirect page', { error, loadingTimeout, hasUser: !!user });
     return (
       <div className="relative min-h-screen flex items-center justify-center px-4">
         <CyberBackground />
         <div className="text-center">
-          <div className="text-red-400 text-lg mb-4">{error}</div>
+          <div className="text-red-400 text-lg mb-4">
+            {error || (loadingTimeout ? 'Loading timeout - please try logging in again' : 'Authentication required')}
+          </div>
+          <div className="text-white/60 text-sm mb-4">
+            Debug info: user={!!user}, loading={loading}, error={!!error}, timeout={loadingTimeout}
+          </div>
           <button
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              console.log('Dashboard: Manual redirect to login clicked');
+              window.location.href = '/login';
+            }}
             className="btn-neon-solid px-6 py-2 rounded-lg text-sm font-semibold"
           >
-            Retry
+            Go to Login
           </button>
         </div>
       </div>
     );
   }
 
-  if (!user) {
-    return null; // Will redirect via auth listener in useUser hook
-  }
+  console.log('DashboardLayout: User authenticated, rendering dashboard for:', user?.id);
 
   const userInitials = user.email?.slice(0, 2).toUpperCase() || 'DU';
 

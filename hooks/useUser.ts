@@ -18,10 +18,9 @@ export function useUser() {
         .select('*')
         .eq('user_id', userId)
         .single();
-      
+
       if (error) {
         if (error.code === 'PGRST116') {
-          // No rows returned - connection doesn't exist
           setWhatsappConnection(null);
         } else {
           console.error('Error fetching WhatsApp connection:', error);
@@ -34,80 +33,87 @@ export function useUser() {
     }
   };
 
-  useEffect(() => {
-    const loadUser = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // console.log('useUser: Fetching auth session...');
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (!session) {
-          // console.log('useUser: No session found');
-          setUser(null);
-          setUserData(null);
-          setWhatsappConnection(null);
-          return;
-        }
+  const loadUserSession = async () => {
+    setLoading(true);
+    setError(null);
 
-        // console.log('useUser: Session found, user:', session.user.id);
-        setUser(session.user);
-        
-        // Load user data from users table
-        // console.log('useUser: Fetching user data from database...');
-        const data = await getUserData(session.user.id);
-        
-        if (data) {
-          // console.log('useUser: User data loaded:', data);
-          setUserData(data);
-        } else {
-          // console.log('useUser: No user data found, using defaults');
-          setUserData({
-            plan: 'starter',
-            message_limit: 200,
-            messages_used: 0,
-          });
-        }
+    try {
+      console.log('[useUser] Calling supabase.auth.getSession()...');
+      const { data: { session } } = await supabase.auth.getSession();
 
-        // Fetch WhatsApp connection data
-        await fetchWhatsappConnection(session.user.id);
-      } catch (err) {
-        console.error('useUser: Error loading user:', err);
-        setError('Failed to load user data');
-      } finally {
-        setLoading(false);
-      }
-    };
+      console.log('[useUser] getSession result:', {
+        hasSession: !!session,
+        userId: session?.user?.id,
+        sessionExpiry: session?.expires_at,
+      });
 
-    loadUser();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
-        // console.log('useUser: Auth state changed - no session');
         setUser(null);
         setUserData(null);
         setWhatsappConnection(null);
         router.push('/login');
-      } else {
-        // console.log('useUser: Auth state changed - session exists');
-        setUser(session.user);
-        getUserData(session.user.id)
-          .then(data => {
-            if (data) {
-              setUserData(data);
-            } else {
-              setUserData({
-                plan: 'starter',
-                message_limit: 200,
-                messages_used: 0,
-              });
-            }
-          })
-          .then(() => fetchWhatsappConnection(session.user.id))
-          .catch(err => console.error('useUser: Error fetching user data on auth change:', err));
+        return;
       }
+
+      setUser(session.user);
+
+      const data = await getUserData(session.user.id);
+      console.log('[useUser] User data fetch result:', { hasData: !!data });
+
+      if (data) {
+        setUserData(data);
+      } else {
+        setUserData({
+          plan: 'starter',
+          message_limit: 200,
+          messages_used: 0,
+        });
+      }
+
+      await fetchWhatsappConnection(session.user.id);
+    } catch (err) {
+      console.error('[useUser] Error loading user:', err);
+      setError('Failed to load user data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    console.log('[useUser] useUser hook initialized');
+    loadUserSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('[useUser] Auth state change:', {
+        event: _event,
+        hasSession: !!session,
+        userId: session?.user?.id,
+      });
+
+      if (!session) {
+        setUser(null);
+        setUserData(null);
+        setWhatsappConnection(null);
+        router.push('/login');
+        return;
+      }
+
+      setUser(session.user);
+
+      getUserData(session.user.id)
+        .then(data => {
+          if (data) {
+            setUserData(data);
+          } else {
+            setUserData({
+              plan: 'starter',
+              message_limit: 200,
+              messages_used: 0,
+            });
+          }
+        })
+        .then(() => fetchWhatsappConnection(session.user.id))
+        .catch(err => console.error('[useUser] Error fetching user data on auth change:', err));
     });
 
     return () => subscription.unsubscribe();

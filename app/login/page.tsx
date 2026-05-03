@@ -2,14 +2,14 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import CyberBackground from '@/components/CyberBackground';
 import { Bot, Eye, EyeOff, ArrowRight, Lock, Mail } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { loginSchema } from '@/lib/validators';
 
 export default function LoginPage() {
-  const router = useRouter();
+  console.log('[LOGIN] LoginPage component mounted');
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -21,26 +21,36 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
+    console.log('[LOGIN] Starting login process...');
+
     try {
       // Validate input using login schema
       const validationResult = loginSchema.safeParse({ email, password });
       if (!validationResult.success) {
         const firstError = validationResult.error.errors[0]?.message;
+        console.log('[LOGIN] Validation failed:', firstError);
         setError(firstError || 'Invalid input');
         setLoading(false);
         return;
       }
 
-      console.log('[LOGIN] Attempting signInWithPassword for:', email);
+      console.log('[LOGIN] Validation passed, attempting signInWithPassword for:', email);
 
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      console.log('[LOGIN] Supabase response:', { data, error: signInError });
+      console.log('[LOGIN] Supabase response received:', {
+        hasData: !!data,
+        hasUser: !!data?.user,
+        hasSession: !!data?.session,
+        error: signInError?.message
+      });
 
       if (signInError) {
+        console.log('[LOGIN] Sign in error:', signInError.message);
+
         // Handle specific error messages with user-friendly responses
         const errorMsg = signInError.message.toLowerCase();
         
@@ -75,10 +85,27 @@ export default function LoginPage() {
         return;
       }
 
-      if (data.user) {
-        console.log('[LOGIN] Success for user:', data.user.id);
-        router.push('/dashboard');
+      if (data.session) {
+        console.log('[LOGIN] ✅ SUCCESS: Session established for user:', data.user?.id);
+        console.log('[LOGIN] Redirecting to dashboard with full page reload...');
+        // Force a full page reload to ensure session cookies are set
+        window.location.replace('/dashboard');
+        return;
       }
+
+      if (data.user) {
+        console.log('[LOGIN] ⚠️  PARTIAL SUCCESS: User signed in but session was not found:', data.user.id);
+        console.log('[LOGIN] Waiting 200ms then redirecting with full page reload...');
+        // Wait a bit longer for session to be established, then force reload
+        setTimeout(() => {
+          console.log('[LOGIN] Executing delayed redirect with full page reload...');
+          window.location.replace('/dashboard');
+        }, 200);
+        return;
+      }
+
+      console.log('[LOGIN] ❌ FAILURE: No user or session returned from signInWithPassword');
+      setError('Login succeeded but no session was established. Please try again.');
     } catch (err) {
       console.error('[LOGIN] Unexpected error:', err);
       setError('An unexpected error occurred. Please try again.');

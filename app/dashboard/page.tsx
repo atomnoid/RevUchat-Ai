@@ -242,6 +242,7 @@ function ChatWindow({ customer, onRespond, onResend, resending }: { customer: Cu
   );
 }
 export default function DashboardPage() {
+  console.log('DashboardPage: Component mounted');
   const { user, userData, whatsappConnection, isLimitReached, refresh } = useUser();
   const { customers, loading, stats, refresh: refreshCustomers } = useCustomers(user?.id || null);
   const [name, setName] = useState('');
